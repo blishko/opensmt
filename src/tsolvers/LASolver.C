@@ -388,6 +388,7 @@ LVRef LASolver::findNonBasicForPivotByHeuristic(LVRef basicVar) {
     // favor more independent variables: those present in less rows
     assert(tableau.isBasic(basicVar));
     LVRef v_found = LVRef_Undef;
+    std::size_t candidatesCount = 0;
     if (model.read(basicVar) < model.Lb(basicVar)) {
 
         for (auto const &term : tableau.getRowPoly(basicVar)) {
@@ -400,12 +401,17 @@ LVRef LASolver::findNonBasicForPivotByHeuristic(LVRef basicVar) {
             if ((is_coeff_pos && model.read(var) < model.Ub(var)) ||
                 (!is_coeff_pos && model.read(var) > model.Lb(var))) {
                 if (v_found == LVRef_Undef) {
+                    assert(candidatesCount == 0);
                     v_found = var;
                 }
                     // heuristic favoring more independent vars
-                else if (tableau.getColumn(v_found).size() > tableau.getColumn(var).size()) {
-                    v_found = var;
+                else{
+                    assert(candidatesCount != 0);
+                    if (tableau.getColumn(v_found).size() > tableau.getColumn(var).size()) {
+                        v_found = var;
+                    }
                 }
+                ++candidatesCount;
             }
         }
     }
@@ -421,17 +427,52 @@ LVRef LASolver::findNonBasicForPivotByHeuristic(LVRef basicVar) {
             if ((!is_coeff_pos && model.read(var) < model.Ub(var)) ||
                 (is_coeff_pos && model.read(var) > model.Lb(var))) {
                 if (v_found == LVRef_Undef) {
+                    assert(candidatesCount == 0);
                     v_found = var;
                 }
                     // heuristic favoring more independent vars
-                else if (tableau.getColumn(v_found).size() > tableau.getColumn(var).size()) {
-                    v_found = var;
+                else {
+                    assert(candidatesCount != 0);
+                    if (tableau.getColumn(v_found).size() > tableau.getColumn(var).size()) {
+                        v_found = var;
+                    }
                 }
+                ++candidatesCount;
             }
         }
     }
     else{
         opensmt_error( "Error in bounds comparison" );
+    }
+    if (candidatesCount == 1) {
+        assert(v_found != LVRef_Undef);
+//        std::cout << "Single candidate for pivot!\n";
+        Delta const& val = model.read(basicVar);
+        Delta const& upperBound = model.Ub(basicVar);
+        Delta const& lowerBound = model.Lb(basicVar);
+//        std::cout << "Upper bound: " << upperBound << '\n';
+//        std::cout << "Lower bound: " << lowerBound << '\n';
+//        std::cout << "Value: " << val << '\n';
+        bool decreasing =  val > model.Ub(basicVar);
+        Delta changeNeeded = decreasing ? val - upperBound : lowerBound - val;
+        Real const & coeff = tableau.getCoeff(basicVar, v_found);
+        const bool is_coeff_pos = coeff > 0;
+        const bool should_decrease = (is_coeff_pos == decreasing);
+//        std::cout << "Candidate upper bound: " << model.Ub(v_found) << '\n';
+//        std::cout << "Candidate lower bound: " << model.Lb(v_found) << '\n';
+//        std::cout << "Candidate Value: " << model.read(v_found) << '\n';
+        Delta changePossible = should_decrease ? (model.read(v_found) - model.Lb(v_found)) : (model.Ub(v_found) - model.read(v_found));
+        assert(changePossible > 0);
+        Delta weightedChangePossible = coeff * changePossible;
+        if (!is_coeff_pos) { weightedChangePossible.negate(); };
+        assert(weightedChangePossible > 0);
+//        std::cout << "Change needed: " << changeNeeded << '\n';
+//        std::cout << "Change possible: " << weightedChangePossible << '\n';
+        if ( changeNeeded > weightedChangePossible) {
+//            std::cout << "Early conflict detected!" << std::endl;
+            return LVRef_Undef;
+        }
+//        std::cout << std::endl;
     }
     return v_found;
 }

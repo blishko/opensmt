@@ -175,10 +175,14 @@ Delta operator-=( Delta &a, const Delta &b )
 
 Delta operator-( const Delta &a, const Delta &b )
 {
-    if ( !( a.isInf( ) || b.isInf( ) ) )
-        return Delta( a.R( ) - b.R( ), a.D( ) - b.D( ) );
-    else
-        return a;
+    if (a.isInf()) { return a; }
+    if (b.isInf()) { Delta res = b; res.negate(); return res; }
+    // none is infinite
+    return Delta( a.R( ) - b.R( ), a.D( ) - b.D( ) );
+//    if ( !( a.isInf( ) || b.isInf( ) ) )
+//        return Delta( a.R( ) - b.R( ), a.D( ) - b.D( ) );
+//    else
+//        return a;
 }
 
 Delta operator+( const Delta &a, const Delta &b )
@@ -194,7 +198,13 @@ Delta operator*( const Real &c, const Delta &a )
     if( !( a.isInf( ) ) )
         return Delta( c * a.R( ), c * a.D( ) );
     else
-        return a;
+    {
+        Delta res = a;
+        if (c < 0) {
+            res.negate();
+        }
+        return res;
+    }
 }
 
 Delta operator*( const Delta &a, const Real &c )
