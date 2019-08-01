@@ -202,6 +202,7 @@ void THandler::getConflict (
 #ifdef VERBOSE_EUF
     cerr << "Explanation clause: " << endl;
 #endif
+
     while (explanation.size() != 0) {
         PtAsgn ta = explanation.last( );
         explanation.pop( );
@@ -223,12 +224,39 @@ void THandler::getConflict (
         assert( isOnTrail(l, trail) );
 #endif
         conflict.push( ~l );
-
         if ( max_decision_level < vardata[ var(l) ].level )
             max_decision_level = vardata[ var(l) ].level;
     }
 #endif
 
+}
+
+void THandler::getConflict (vec<Lit> & conflict)
+{
+    vec<PtAsgn> explanation;
+    int i;
+    for (i = 0; i < getSolverHandler().tsolvers.size(); i++) {
+        if (getSolverHandler().tsolvers[i] != NULL && getSolverHandler().tsolvers[i]->hasExplanation()) {
+            getSolverHandler().tsolvers[i]->getConflict(false, explanation);
+            break;
+        }
+    }
+    assert(i != getSolverHandler().tsolvers.size());
+
+    if ( explanation.size() == 0 ) {
+        return;
+    }
+
+    while (explanation.size() != 0) {
+        PtAsgn ta = explanation.last( );
+        explanation.pop( );
+        Lit l = tmap.getLit(ta.tr);
+        // Get the sign right
+        lbool val = ta.sgn;
+        if (val == l_False)
+            l = ~l;
+        conflict.push( ~l );
+    }
 }
 
 #ifdef PRODUCE_PROOF
@@ -342,6 +370,8 @@ void THandler::getReason( Lit l, vec< Lit > & reason)
 //                   egraph.check( true );
     lbool res = l_Undef;
     // Assign temporarily opposite polarity
+//    std::cout << getLogic().printTerm(e) << std::endl;
+//    std::cout << "Sign: " << sign(~l) << std::endl;
     res = solver->assertLit(PtAsgn(e, sign(~l) ? l_False : l_True)) == false ? l_False : l_Undef;
 
     if ( res != l_False ) {

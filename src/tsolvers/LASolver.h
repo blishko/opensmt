@@ -138,6 +138,7 @@ protected:
     virtual void notifyVar(LVRef v) {}                             // Notify the solver of the existence of the var. This is so that LIA can add it to integer vars list.
     void changeValueBy( LVRef, const Delta & );                    // Updates the bounds after constraint pushing
     void getConflictingBounds( LVRef, vec<PTRef> & );       // Returns the bounds conflicting with the actual model
+    const LABound& weakenConflictBound(LVRef, const LABound&);
     void getDeducedBounds( const Delta& c, BoundT, vec<PtAsgn_reason>& dst, SolverId solver_id ); // find possible deductions by value c
     void getDeducedBounds( BoundT, vec<PtAsgn_reason>& dst, SolverId solver_id );                 // find possible deductions for actual bounds values
     void getSuggestions( vec<PTRef>& dst, SolverId solver_id );                                   // find possible suggested atoms

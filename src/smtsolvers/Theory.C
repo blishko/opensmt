@@ -178,24 +178,27 @@ CoreSMTSolver::handleUnsat()
         return TPropRes::Unsat;
 #endif
     vec< Lit > conflicting;
+
+
+    theory_handler.getConflict(conflicting);
+
+    int        max_decision_level = 0;
+    for (int i = 0; i < conflicting.size(); ++i) {
+        Var v = var(conflicting[i]);
+        if (assigns[v] == l_Undef) {
+//            std::cerr << "Unassigned variable in conflict!" << std::endl;
+            uncheckedEnqueue(~conflicting[i], CRef_Fake);
+        }
+        int level = this->level(v);
+        if (max_decision_level < level) {
+            max_decision_level = level;
+        }
+    }
+
     vec< Lit > learnt_clause;
-    int        max_decision_level;
     int        backtrack_level;
-
-#ifdef PEDANTIC_DEBUG
-    theory_handler.getConflict(conflicting, vardata, max_decision_level, trail);
-#else
-    theory_handler.getConflict(conflicting, vardata, max_decision_level);
-#endif
-#ifdef PRODUCE_PROOF
-    /*
-    PTRef interp = PTRef_Undef;
-    if ( config.produce_inter() > 0 )
-        interp = theory_handler.getInterpolants( );
-    */
-#endif
-
     assert( max_decision_level <= decisionLevel( ) );
+    assert(max_decision_level == decisionLevel());
     cancelUntil( max_decision_level );
 
     if ( decisionLevel( ) == 0 )

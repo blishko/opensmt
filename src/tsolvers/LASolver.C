@@ -789,6 +789,67 @@ bool LASolver::setStatus( LASolverStatus s )
         has_explanation = true;
     return getStatus( );
 }
+
+const LABound& LASolver::weakenConflictBound(LVRef x, const LABound& b) {
+    if (b.getType() == bound_l) {
+        assert(model.read(x) < model.Lb(x));
+        const LABound* current = &b;
+        for (int it = b.getIdx() - 1; it >= 0; it = it - 1) {
+            LABoundRef bound_prop_ref = getBound(x, it);
+            LABound &bound_prop = ba[bound_prop_ref];
+            if (bound_prop.getValue().isInf() || bound_prop.getType() != bound_l)
+                continue;
+            if (model.read(x) < bound_prop.getValue()) {
+                current = &bound_prop;
+//                std::cout << "Conflict can be weaken!\n";
+//                std::cout << "Value: " << model.read(x) << '\n';
+//                std::cout << "Original bound: " << model.Lb(x) << '\n';
+//                std::cout << "Weaker bound: " << bound_prop.getValue() << '\n';
+//                std::cout << "Original PTRef: " << logic.printTerm(b.getPTRef()) << '\n';
+//                std::cout << "Original Sign: " << toInt(b.getSign()) << '\n';
+//                std::cout << "New PTRef: " << logic.printTerm(bound_prop.getPTRef()) << '\n';
+//                std::cout << "New Sign: " << toInt(bound_prop.getSign()) << '\n';
+//                std::cout << std::endl;
+
+            }
+            else {
+                break;
+            }
+        }
+        return *current;
+    }
+    else if (b.getType() == bound_u) {
+        assert(model.read(x) > model.Ub(x));
+        const LABound* current = &b;
+        for (int it = b.getIdx() + 1; it < boundStore.getBoundListSize(x) - 1; it = it + 1) {
+            LABoundRef bound_prop_ref = getBound(x, it);
+            LABound & bound_prop = ba[bound_prop_ref];
+            if (bound_prop.getValue().isInf() || bound_prop.getType() != bound_u)
+                continue;
+            if (model.read(x) > bound_prop.getValue()) {
+                current = &bound_prop;
+//                std::cout << "Conflict can be weaken!\n";
+//                std::cout << "Value: " << model.read(x) << '\n';
+//                std::cout << "Original bound: " << model.Ub(x) << '\n';
+//                std::cout << "Weaker bound: " << bound_prop.getValue() << '\n';
+//                std::cout << "Original PTRef: " << logic.printTerm(b.getPTRef()) << '\n';
+//                std::cout << "Original Sign: " << toInt(b.getSign()) << '\n';
+//                std::cout << "New PTRef: " << logic.printTerm(bound_prop.getPTRef()) << '\n';
+//                std::cout << "New Sign: " << toInt(bound_prop.getSign()) << '\n';
+//                std::cout << std::endl;
+            }
+            else {
+                break;
+            }
+        }
+        return *current;
+    }
+    else {
+        assert(false);
+        return b;
+    }
+}
+
 //
 // Returns the bounds conflicting with the actual model.
 //
@@ -796,10 +857,8 @@ void LASolver::getConflictingBounds( LVRef x, vec<PTRef> & dst )
 {
     if (model.read(x) < model.Lb(x)) {
         // add all bounds for polynomial elements, which limit lower bound
-        const LABound& b_f = model.readLBound(x);
+        const LABound& b_f = weakenConflictBound(x, model.readLBound(x));
         dst.push(b_f.getSign() == l_True ? b_f.getPTRef() : logic.mkNot(b_f.getPTRef()));
-//        dst.push(model.readLBound(x).getPTRef());
-//        dst.push(ba[bla[lva[x].getBounds()][lva[x].lbound()]].getPTRef());
         explanationCoefficients.emplace_back( 1 );
         for (auto const & term : tableau.getRowPoly(x)) {
             Real const & coeff = term.coeff;
@@ -821,39 +880,11 @@ void LASolver::getConflictingBounds( LVRef x, vec<PTRef> & dst )
                 explanationCoefficients.push_back(coeff);
             }
         }
-
-//        for (int i = 0; i < polyStore.getSize(lva[x].getPolyRef()); i++) {
-//            const PolyTerm &pt = pta[polyStore.readTerm(polyStore.getPolyRef(x), i)];
-//            const Real &a = pt.coef;
-//            assert( a != 0 );
-//            LVRef y = pt.var;
-//            //LVRef y = columns[lva[pt.var].getColId()];
-//            assert(x != y);
-//
-//            if (a < 0) {
-//                const LABound& b = model.readLBound(y);
-////                printf("The bound is %s\n", b.getSign() == l_True ? "positive" : "negative");
-//                assert( b.getPTRef() != PTRef_Undef );
-//                dst.push( b.getSign() == l_True ? b.getPTRef() : logic.mkNot(b.getPTRef()) );
-//
-//                explanationCoefficients.push_back( -a );
-//            }
-//            else {
-//                const LABound& b = model.readUBound(y);
-////                printf("The bound is %s\n", b.getSign() == l_True ? "positive" : "negative");
-//                assert( b.getPTRef() != PTRef_Undef );
-//                dst.push( b.getSign() == l_True ? b.getPTRef() : logic.mkNot(b.getPTRef()) );
-//
-//                explanationCoefficients.push_back(a);
-//            }
-//        }
     }
     if (model.read(x) > model.Ub(x)) {
         // add all bounds for polynomial elements, which limit upper bound
-//        dst.push(ba[bla[lva[x].getBounds()][lva[x].ubound()]].getPTRef());
-        const LABound& b_f = model.readUBound(x);
+        const LABound& b_f = weakenConflictBound(x, model.readUBound(x));
         dst.push(b_f.getSign() == l_True ? b_f.getPTRef() : logic.mkNot(b_f.getPTRef()));
-//        dst.push(model.readUBound(x).getPTRef());
         explanationCoefficients.emplace_back( 1 );
 
         for (auto const & term : tableau.getRowPoly(x)) {
@@ -876,41 +907,12 @@ void LASolver::getConflictingBounds( LVRef x, vec<PTRef> & dst )
                 explanationCoefficients.push_back(-coeff);
             }
         }
-//        for (int i = 0; i < polyStore.getSize(lva[x].getPolyRef()); i++) {
-//            const PolyTerm &pt = pta[polyStore.readTerm(polyStore.getPolyRef(x), i)];
-//            const Real &a = pt.coef;
-//            assert( a != 0 );
-//            LVRef y = pt.var;
-//            //LVRef y = columns[lva[pt.var].getColId()];
-//            assert(x != y);
-//
-//            if (a > 0) {
-////                LABoundRef l_bound = bla[lva[y].getBounds()][lva[y].lbound()];
-//                const LABound& b = model.readLBound(y);
-////                printf("The bound is %s\n", b.getSign() == l_True ? "positive" : "negative");
-//                assert( b.getPTRef() != PTRef_Undef );
-//                dst.push( b.getSign() == l_True ? b.getPTRef() : logic.mkNot(b.getPTRef()) );
-//                explanationCoefficients.push_back( a );
-//            }
-//            else {
-////                LABoundRef u_bound = bla[lva[y].getBounds()][lva[y].ubound()];
-//                const LABound& b = model.readUBound(y);
-////                printf("The bound is %s\n", b.getSign() == l_True ? "positive" : "negative");
-//
-//                assert( b.getPTRef() != PTRef_Undef );
-//                dst.push( b.getSign() == l_True ? b.getPTRef() : logic.mkNot(b.getPTRef()) );
-//                explanationCoefficients.push_back(-a);
-//            }
-//        }
     }
 
 //    printf("I now came up with an explanation.  It looks like this:\n");
 //    for (int i = 0; i < dst.size(); i++)
 //        printf("(%s) ", logic.printTerm(dst[i]));
 //    printf("\n");
-
-//    assert( dst.size() == polyStore.getSize(lva[x].getPolyRef())+1 ); // One for each term plus the broken equality
-
 }
 
 void LASolver::getSimpleDeductions(LVRef v, LABoundRef br)

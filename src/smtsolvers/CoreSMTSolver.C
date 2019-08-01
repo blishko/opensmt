@@ -499,6 +499,7 @@ void CoreSMTSolver::cancelUntil(int level)
 
         //if ( first_model_found )
         theory_handler.backtrack(trail.size());
+
     }
 }
 
