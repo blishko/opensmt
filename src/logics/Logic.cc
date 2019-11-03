@@ -33,6 +33,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <queue>
 #include <set>
 #include "SubstLoopBreaker.h"
+#include <unordered_map>
 
 #include <sys/wait.h>
 
@@ -1639,37 +1640,53 @@ void Logic::getNewFacts2(PTRef root, vec<Map<PTRef,lbool,PTRefHash>*>& prev_unit
 }
 
 namespace{
-std::unordered_set<PtAsgn, PtAsgnHash> getFactsRecursively(Logic& logic, PtAsgn fla) {
-    std::unordered_set<PtAsgn, PtAsgnHash> res;
+template<typename C, typename V>
+bool has(const C& cont, V val) {
+    return cont.find(val) != cont.end();
+}
+using fact_set_t = std::unordered_set<PtAsgn, PtAsgnHash>;
+void getFactsRecursively(Logic& logic, PtAsgn fla, std::unordered_map<PtAsgn,fact_set_t,PtAsgnHash>& isProcessed) {
+    assert(!has(isProcessed, fla));
     PTRef ptref = fla.tr;
     lbool sign = fla.sgn;
     if ((logic.isAnd(ptref) && sign == l_True) || (logic.isOr(ptref) && sign == l_False)) {
         // conjunction, collect facts from all conjuncts
-        const Pterm& pterm = logic.getPterm(ptref);
-        for (int i = 0; i < pterm.size(); ++i) {
+        fact_set_t res;
+        for (int i = 0; i < logic.getPterm(ptref).size(); ++i) {
             PTRef c;
             lbool c_sign;
-            logic.purify(pterm[i], c, c_sign);
+            logic.purify(logic.getPterm(ptref)[i], c, c_sign);
             c_sign = c_sign^(logic.isOr(ptref)); // MB: TEST THIS!
-            auto c_res = getFactsRecursively(logic, PtAsgn(c, c_sign));
+            PtAsgn child(c, c_sign);
+            if (!has(isProcessed, child)) {
+                getFactsRecursively(logic, child, isProcessed);
+            }
+            assert(has(isProcessed, child));
+            fact_set_t const& c_res = isProcessed[child];
             // C++17 should allow for res.merge(c_res);
             res.insert(c_res.begin(), c_res.end());
         }
-        return res;
+        isProcessed.insert(std::make_pair<>(fla, std::move(res)));
+        return;
     }
     if ((logic.isOr(ptref) && sign == l_True) || (logic.isAnd(ptref) && sign == l_False)) {
         // disjunction, collect intersection of facts from all disjuncts
-        const Pterm& pterm = logic.getPterm(ptref);
-        for (int i = 0; i < pterm.size(); ++i) {
+        fact_set_t res;
+        for (int i = 0; i < logic.getPterm(ptref).size(); ++i) {
             PTRef c;
             lbool c_sign;
-            logic.purify(pterm[i], c, c_sign);
+            logic.purify(logic.getPterm(ptref)[i], c, c_sign);
             c_sign = c_sign^(logic.isAnd(ptref)); // MB: TEST THIS!
-            auto c_res = getFactsRecursively(logic, PtAsgn(c, c_sign));
-            if (c_res.empty()) { return c_res; } // IF any children returned empty set, thats what we need to return
+            PtAsgn child(c, c_sign);
+            if (!has(isProcessed, child)) {
+                getFactsRecursively(logic, child, isProcessed);
+            }
+            assert(has(isProcessed, child));
+            auto const& c_res = isProcessed[child];
+            if (c_res.empty()) { isProcessed.insert(std::make_pair(fla, c_res)); return; } // IF any children returned empty set, thats what we need to return
             if (i == 0) {
                 // Init of the intersection
-                res = std::move(c_res);
+                res = c_res;
             }
             else {
                 // actual intersection
@@ -1679,13 +1696,15 @@ std::unordered_set<PtAsgn, PtAsgnHash> getFactsRecursively(Logic& logic, PtAsgn 
                         intersection.insert(val);
                     }
                 }
-                if (intersection.empty()) { return intersection; }
+                if (intersection.empty()) { isProcessed.insert(std::make_pair(fla, intersection)); return; }
                 std::swap(res, intersection);
             }
         }
-        return res;
+        isProcessed.insert(std::make_pair(fla, res));
+        return;
     }
     // NOT "and" or "or"
+    fact_set_t res;
     if (logic.isEquality(ptref) && sign == l_True) {
         res.insert(fla);
     }
@@ -1694,14 +1713,18 @@ std::unordered_set<PtAsgn, PtAsgnHash> getFactsRecursively(Logic& logic, PtAsgn 
     }
     else if (logic.isXor(ptref) && sign == l_True) {
         const Pterm& t = logic.getPterm(ptref);
-        res.insert(PtAsgn(logic.mkEq(t[0], logic.mkNot(t[1])), l_True));
+        PTRef t0 = t[0];
+        PTRef t1 = t[1];
+        res.insert(PtAsgn(logic.mkEq(t0, logic.mkNot(t1)), l_True));
     }
     else {
+        // MB: TODO: this may miss something
         if (logic.isBoolAtom(ptref)) {
             res.insert(fla);
         }
     }
-    return res;
+    isProcessed.insert(std::make_pair(fla, res));
+    return;
 }
 }
 
@@ -1709,8 +1732,11 @@ void Logic::getNewFacts(PTRef root, vec<Map<PTRef,lbool,PTRefHash>*>& prev_units
     PTRef fla;
     lbool sign;
     purify(root, fla, sign);
-    auto fact_set = getFactsRecursively(*this, PtAsgn(fla, sign));
-    for (auto fact : fact_set) {
+    std::unordered_map<PtAsgn,std::unordered_set<PtAsgn, PtAsgnHash>,PtAsgnHash> isProcessed;
+    PtAsgn pa(fla, sign);
+    getFactsRecursively(*this, pa, isProcessed);
+    assert(has(isProcessed, pa));
+    for (auto fact : isProcessed[pa]) {
         lbool prev_val = isInHashes(prev_units, facts, fact);
         if (prev_val != l_Undef && prev_val != fact.sgn) {
             assert(false); // MB: Examine! I believe this should not happen, or we should do something else;
