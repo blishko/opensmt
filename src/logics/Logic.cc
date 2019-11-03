@@ -1553,7 +1553,7 @@ lbool Logic::isInHashes(vec<Map<PTRef,lbool,PTRefHash>*>& hashes, Map<PTRef,lboo
 // used.  Depending on the theory a fact should either be added on the
 // top level or left out to reduce e.g. simplex matrix size.
 //
-void Logic::getNewFacts(PTRef root, vec<Map<PTRef,lbool,PTRefHash>*>& prev_units, Map<PTRef,lbool,PTRefHash>& facts)
+void Logic::getNewFacts2(PTRef root, vec<Map<PTRef,lbool,PTRefHash>*>& prev_units, Map<PTRef,lbool,PTRefHash>& facts)
 {
     Map<PtAsgn,bool,PtAsgnHash> isdup;
     vec<PtAsgn> queue;
@@ -1636,6 +1636,91 @@ void Logic::getNewFacts(PTRef root, vec<Map<PTRef,lbool,PTRefHash>*>& prev_units
     for (int i = 0; i < facts_dbg.size(); i++)
         cerr << (facts_dbg[i].data == l_True ? "" : "not ") << printTerm(facts_dbg[i].key) << " (" << facts_dbg[i].key.x << ")" << endl;
 #endif
+}
+
+namespace{
+std::unordered_set<PtAsgn, PtAsgnHash> getFactsRecursively(Logic& logic, PtAsgn fla) {
+    std::unordered_set<PtAsgn, PtAsgnHash> res;
+    PTRef ptref = fla.tr;
+    lbool sign = fla.sgn;
+    if ((logic.isAnd(ptref) && sign == l_True) || (logic.isOr(ptref) && sign == l_False)) {
+        // conjunction, collect facts from all conjuncts
+        const Pterm& pterm = logic.getPterm(ptref);
+        for (int i = 0; i < pterm.size(); ++i) {
+            PTRef c;
+            lbool c_sign;
+            logic.purify(pterm[i], c, c_sign);
+            c_sign = c_sign^(logic.isOr(ptref)); // MB: TEST THIS!
+            auto c_res = getFactsRecursively(logic, PtAsgn(c, c_sign));
+            // C++17 should allow for res.merge(c_res);
+            res.insert(c_res.begin(), c_res.end());
+        }
+        return res;
+    }
+    if ((logic.isOr(ptref) && sign == l_True) || (logic.isAnd(ptref) && sign == l_False)) {
+        // disjunction, collect intersection of facts from all disjuncts
+        const Pterm& pterm = logic.getPterm(ptref);
+        for (int i = 0; i < pterm.size(); ++i) {
+            PTRef c;
+            lbool c_sign;
+            logic.purify(pterm[i], c, c_sign);
+            c_sign = c_sign^(logic.isAnd(ptref)); // MB: TEST THIS!
+            auto c_res = getFactsRecursively(logic, PtAsgn(c, c_sign));
+            if (c_res.empty()) { return c_res; } // IF any children returned empty set, thats what we need to return
+            if (i == 0) {
+                // Init of the intersection
+                res = std::move(c_res);
+            }
+            else {
+                // actual intersection
+                std::unordered_set<PtAsgn, PtAsgnHash> intersection;
+                for (auto const& val : res) {
+                    if (c_res.count(val) > 0) {
+                        intersection.insert(val);
+                    }
+                }
+                if (intersection.empty()) { return intersection; }
+                std::swap(res, intersection);
+            }
+        }
+        return res;
+    }
+    // NOT "and" or "or"
+    if (logic.isEquality(ptref) && sign == l_True) {
+        res.insert(fla);
+    }
+    else if (logic.isUP(ptref) && sign == l_True) {
+        res.insert(fla);
+    }
+    else if (logic.isXor(ptref) && sign == l_True) {
+        const Pterm& t = logic.getPterm(ptref);
+        res.insert(PtAsgn(logic.mkEq(t[0], logic.mkNot(t[1])), l_True));
+    }
+    else {
+        if (logic.isBoolAtom(ptref)) {
+            res.insert(fla);
+        }
+    }
+    return res;
+}
+}
+
+void Logic::getNewFacts(PTRef root, vec<Map<PTRef,lbool,PTRefHash>*>& prev_units, Map<PTRef,lbool,PTRefHash>& facts) {
+    PTRef fla;
+    lbool sign;
+    purify(root, fla, sign);
+    auto fact_set = getFactsRecursively(*this, PtAsgn(fla, sign));
+    for (auto fact : fact_set) {
+        lbool prev_val = isInHashes(prev_units, facts, fact);
+        if (prev_val != l_Undef && prev_val != fact.sgn) {
+            assert(false); // MB: Examine! I believe this should not happen, or we should do something else;
+            return; // conflict
+        }
+        else if (prev_val == fact.sgn) {
+            continue; // Already seen, no need to do anything
+        }
+        facts.insert(fact.tr, fact.sgn);
+    }
 }
 
 //
