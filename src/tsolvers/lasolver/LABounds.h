@@ -27,10 +27,24 @@ public:
     LABound(BoundT type, LVRef var, const Delta& delta, int id);
     inline void setIdx(BLIdx i)  { bidx = i.x; }
     inline BLIdx getIdx() const { return {bidx}; }
-    inline const Delta& getValue() const { return delta; }
+//    inline const Delta& getValue() const { return delta; }
+    bool isUpperFor(Delta const & val) const { return val <= delta; }
+    bool isLowerFor(Delta const & val) const { return val >= delta; }
+    bool isStrictUpperFor(Delta const & val) const { return val < delta; }
+    bool isStrictLowerFor(Delta const & val) const { return val > delta; }
+
     inline BoundT getType() const { return { type }; }
     inline LVRef getLVRef() const { return var; }
     int getId() const { return id; }
+    char* print() const;
+    bool isMinusInf() const { return delta.isMinusInf(); }
+    bool isPlusInf()  const { return delta.isPlusInf(); }
+    bool isInf()      const { return delta.isInf(); }
+    Delta getDiff(Delta const& val) const { return delta - val; }
+    char* printValue() const { return delta.printValue(); }
+    bool hasSameValueAs(LABound const & other) const { return this->delta == other.delta; }
+
+    inline friend bool operator<( const LABound &a, const LABound &b ) { return a.delta < b.delta; }
 };
 
 class LABoundAllocator : public RegionAllocator<uint32_t>

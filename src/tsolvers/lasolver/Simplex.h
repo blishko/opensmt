@@ -47,7 +47,7 @@ class Simplex {
     // mutable std::unordered_set<LVRef, LVRefHash> candidates;
     mutable std::set<LVRef, LVRefComp> candidates;
     bool isEquality(LVRef) const;
-    const Delta overBound(LVRef) const;
+//    const Delta overBound(LVRef) const;
     // Model & bounds
 
     const LABoundRef getBound(LVRef v, int idx) const ;//{ return boundStore.getBoundByIdx(v, idx); }
@@ -84,8 +84,8 @@ public:
     Explanation assertBoundOnVar(LVRef it, LABoundRef itBound_ref);
     bool isProcessedByTableau  (LVRef var) const;
     inline bool isModelOutOfBounds    (LVRef v) const { return isModelOutOfUpperBound(v) || isModelOutOfLowerBound(v); }
-    inline bool isModelOutOfUpperBound(LVRef v) const { return ( model->read(v) > model->Ub(v) ); }
-    inline bool isModelOutOfLowerBound(LVRef v) const { return ( model->read(v) < model->Lb(v) ); }
+    inline bool isModelOutOfUpperBound(LVRef v) const { return !model->readUBound(v).isUpperFor(model->read(v)); }
+    inline bool isModelOutOfLowerBound(LVRef v) const { return !model->readLBound(v).isLowerFor(model->read(v)); }
     void newNonbasicVar(LVRef v) { newVar(v); tableau.newNonbasicVar(v); }
     void nonbasicVar(LVRef v)    { newVar(v); tableau.nonbasicVar(v); }
     void newRow(LVRef x, std::unique_ptr<Polynomial> poly) { newVar(x); tableau.newRow(x, std::move(poly)); }
@@ -98,8 +98,10 @@ public:
 //    Delta read(LVRef v) const { assert(!tableau.isQuasiBasic(v)); return model->read(v); } // ignores unsafely variables deleted by gaussian elimination
     const LABoundRef readLBoundRef(const LVRef &v) const { return model->readLBoundRef(v); }
     const LABoundRef readUBoundRef(const LVRef &v) const { return model->readUBoundRef(v); }
-    const Delta& Lb(LVRef v) const { return model->Lb(v); }
-    const Delta& Ub(LVRef v) const { return model->Ub(v); }
+    const LABound & readLBound(const LVRef &v) const { return model->readLBound(v); }
+    const LABound & readUBound(const LVRef &v) const { return model->readUBound(v); }
+//    const Delta& Lb(LVRef v) const { return model->Lb(v); }
+//    const Delta& Ub(LVRef v) const { return model->Ub(v); }
 
     // Keeping track of activated bounds
 private:
@@ -136,15 +138,15 @@ public:
         auto const& val = model->read(var);
         bool positive = false;
         auto const& positive_bound = this->boundStore[pos];
-        if ((positive_bound.getType() == bound_l && positive_bound.getValue() <= val)
-            || (positive_bound.getType() == bound_u && positive_bound.getValue() >= val)) {
+        if ((positive_bound.getType() == bound_l && positive_bound.isLowerFor(val))
+            || (positive_bound.getType() == bound_u && positive_bound.isUpperFor(val))) {
             // The current value of the variable is consistent with the positive bound
             positive = true;
         }
         bool negative = false;
         auto const& negative_bound = this->boundStore[neg];
-        if ((negative_bound.getType() == bound_l && negative_bound.getValue() <= val)
-            || (negative_bound.getType() == bound_u && negative_bound.getValue() >= val)) {
+        if ((negative_bound.getType() == bound_l && negative_bound.isLowerFor(val))
+            || (negative_bound.getType() == bound_u && negative_bound.isUpperFor(val))) {
             // The current value of the variable is consistent with the negative bound
             negative = true;
         }

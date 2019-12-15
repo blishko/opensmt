@@ -98,7 +98,12 @@ void LRAModel::pushBacktrackPoint()      { bound_limits.push(bound_trace.size())
 void LRAModel::popBacktrackPoint() { popBounds(); bound_limits.pop(); }; // Returns the decision if the backtrack point had a decision
 int  LRAModel::getBacktrackSize() const { return bound_limits.size(); }
 
-bool LRAModel::isEquality(LVRef v) const { return bs[int_lbounds[getVarId(v)].last()].getIdx().x+1 == bs[int_ubounds[getVarId(v)].last()].getIdx().x && !Lb(v).isInf() && !Ub(v).isInf() && Lb(v) == Ub(v); }
+bool LRAModel::isEquality(LVRef v) const
+{
+    auto const& lb = readLBound(v);
+    auto const& ub = readUBound(v);
+    return lb.getIdx().x+1 == ub.getIdx().x && !lb.isInf() && !lb.isInf() && lb.hasSameValueAs(ub);
+}
 bool LRAModel::isUnbounded(LVRef v) const { return bs.isUnbounded(v); }
 bool LRAModel::boundSatisfied(LVRef v, LABoundRef b) const { return ((bs[b].getType() == bound_u) && bs[b].getIdx().x >= readUBound(v).getIdx().x) || ((bs[b].getType() == bound_l) && bs[b].getIdx().x <= readLBound(v).getIdx().x); }
 bool LRAModel::boundUnsatisfied(LVRef v, LABoundRef b) const
@@ -110,6 +115,6 @@ bool LRAModel::boundUnsatisfied(LVRef v, LABoundRef b) const
     bool is_lower = bound.getType() == bound_l;
     const LABound& toCompare = is_lower ? readUBound(v) : readLBound(v);
     return (is_lower ? bound.getIdx().x > toCompare.getIdx().x : bound.getIdx().x < toCompare.getIdx().x)
-            && bound.getValue() != toCompare.getValue();
+            && !bound.hasSameValueAs(toCompare);
 
 }

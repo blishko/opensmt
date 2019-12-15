@@ -9,6 +9,40 @@ LABound::LABound(BoundT type, LVRef var, const Delta& delta, int id)
     , delta(delta)
 {}
 
+char* LABound::print() const
+{
+    char* str_out;
+    char* v_str_lvr;
+    int written = asprintf(&v_str_lvr, "v%d", this->getLVRef().x);
+    assert(written >= 0);
+    char* v_str;
+    written = asprintf(&v_str, "%s", v_str_lvr);
+    assert(written >= 0); (void)written;
+    free(v_str_lvr);
+
+    const Delta & d = this->delta;
+    if (d.isMinusInf())
+        written = asprintf(&str_out, "- Inf <= %s", v_str);
+    else if (d.isPlusInf())
+        written = asprintf(&str_out, "%s <= + Inf", v_str);
+    else {
+        opensmt::Real r = d.R();
+        opensmt::Real s = d.D();
+        BoundT type = this->getType();
+        if ((type == bound_l) && (s == 0))
+            written = asprintf(&str_out, "%s <= %s", r.get_str().c_str(), v_str);
+        if ((type == bound_l) && (s != 0))
+            written = asprintf(&str_out, "%s < %s", r.get_str().c_str(), v_str);
+        if ((type == bound_u) && (s == 0))
+            written = asprintf(&str_out, "%s <= %s", v_str, r.get_str().c_str());
+        if ((type == bound_u) && (s != 0))
+            written = asprintf(&str_out, "%s < %s", v_str, r.get_str().c_str());
+    }
+    assert(written >= 0); (void)written;
+    free(v_str);
+    return str_out;
+}
+
 LABoundRef LABoundAllocator::alloc(BoundT type, LVRef var, const Delta& delta)
 {
     uint32_t v = RegionAllocator<uint32_t>::alloc(laboundWord32Size());
@@ -178,36 +212,7 @@ LABoundList::operator[](int i) const
 char*
 LABoundStore::printBound(LABoundRef br) const
 {
-    char *str_out;
-    char *v_str_lvr;
-    int written = asprintf(&v_str_lvr, "v%d", ba[br].getLVRef().x);
-    assert(written >= 0);
-    char* v_str;
-    written = asprintf(&v_str, "%s", v_str_lvr);
-    assert(written >= 0); (void)written;
-    free(v_str_lvr);
-    const Delta & d = ba[br].getValue();
-    if (d.isMinusInf())
-        written = asprintf(&str_out, "- Inf <= %s", v_str);
-    else if (d.isPlusInf())
-        written = asprintf(&str_out, "%s <= + Inf", v_str);
-    else {
-        opensmt::Real r = d.R();
-        opensmt::Real s = d.D();
-        BoundT type = ba[br].getType();
-        if ((type == bound_l) && (s == 0))
-            written = asprintf(&str_out, "%s <= %s", r.get_str().c_str(), v_str);
-        if ((type == bound_l) && (s != 0))
-            written = asprintf(&str_out, "%s < %s", r.get_str().c_str(), v_str);
-        if ((type == bound_u) && (s == 0))
-            written = asprintf(&str_out, "%s <= %s", v_str, r.get_str().c_str());
-        if ((type == bound_u) && (s != 0))
-            written = asprintf(&str_out, "%s < %s", v_str, r.get_str().c_str());
-    }
-    assert(written >= 0); (void)written;
-    free(v_str);
-
-    return str_out;
+    return ba[br].print();
 }
 
 char* LABoundStore::printBounds(LVRef v) const
@@ -247,7 +252,7 @@ inline unsigned       LABoundList::size      ()                 const { return s
 
 inline LVRef          LABoundList::getVar    ()                 const { return v; }
 
-inline bool bound_lessthan::operator() (LABoundRef r1, LABoundRef r2) const { return ba[r1].getValue() < ba[r2].getValue(); }
+inline bool bound_lessthan::operator() (LABoundRef r1, LABoundRef r2) const { return ba[r1] < ba[r2]; }
 
 int LABoundListAllocator::boundlistWord32Size(int size) {
     return (sizeof(LABoundList) + (sizeof(LABoundRef)*size)) / sizeof(uint32_t); }
@@ -262,4 +267,4 @@ inline LABoundListRef     LABoundListAllocator::ael(const LABoundList* t)       
 LABoundListRef LABoundStore::getBounds(LVRef v) const { return var_bound_lists[getVarId(v)]; }
 LABoundRef LABoundStore::getBoundByIdx(LVRef v, int it) const { return bla[getBounds(v)][it]; }
 int LABoundStore::getBoundListSize(LVRef v) { return bla[getBounds(v)].size(); }
-bool LABoundStore::isUnbounded(LVRef v) const { return ( (bla[getBounds(v)].size() == 2) && (ba[bla[getBounds(v)][0]].getValue().isMinusInf()) && (ba[bla[getBounds(v)][1]].getValue().isPlusInf()) ); }
+bool LABoundStore::isUnbounded(LVRef v) const { return ( (bla[getBounds(v)].size() == 2) && (ba[bla[getBounds(v)][0]].isMinusInf()) && (ba[bla[getBounds(v)][1]].isPlusInf()) ); }
