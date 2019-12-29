@@ -563,19 +563,19 @@ void LASolver::getSimpleDeductions(LVRef v, LABoundRef br)
     const LABound& bound = boundStore[br];
     if (bound.isInf())
         return;
-    if (bound.getType() == bound_l) {
+    if (bound.getType() == BoundType::LOWER) {
         for (int it = bound.getIdx().x - 1; it >= 0; it = it - 1) {
             LABoundRef bound_prop_ref = boundStore.getBoundByIdx(v, it);
             LABound &bound_prop = boundStore[bound_prop_ref];
-            if (bound_prop.isInf() || bound_prop.getType() != bound_l)
+            if (bound_prop.isInf() || bound_prop.getType() != BoundType::LOWER)
                 continue;
             deduce(bound_prop_ref);
         }
-    } else if (bound.getType() == bound_u) {
+    } else if (bound.getType() == BoundType::UPPER) {
         for (int it = bound.getIdx().x + 1; it < boundStore.getBoundListSize(v) - 1; it = it + 1) {
             LABoundRef bound_prop_ref = boundStore.getBoundByIdx(v, it);
             LABound & bound_prop = boundStore[bound_prop_ref];
-            if (bound_prop.isInf() || bound_prop.getType() != bound_u)
+            if (bound_prop.isInf() || bound_prop.getType() != BoundType::UPPER)
                 continue;
             deduce(bound_prop_ref);
         }

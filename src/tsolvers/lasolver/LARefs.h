@@ -13,15 +13,26 @@ struct LABoundListRef
 
 static struct LABoundListRef LABoundListRef_Undef = {INT32_MAX};
 
-struct BoundT {
-    char t;
-    bool operator== (const BoundT& o) const { return o.t == t; }
-    bool operator!= (const BoundT& o) const { return o.t != t; }
-    BoundT operator~ () const { return { (char)(1-t) }; }
+//struct BoundT {
+//    char t;
+//    bool operator== (const BoundT& o) const { return o.t == t; }
+//    bool operator!= (const BoundT& o) const { return o.t != t; }
+//    BoundT operator~ () const { return { (char)(1-t) }; }
+//};
+//
+//const BoundT bound_l = { 0 };
+//const BoundT bound_u = { 1 };
+
+enum class BoundType : char {
+    LOWER = 0,
+    UPPER = 1,
 };
 
-const BoundT bound_l = { 0 };
-const BoundT bound_u = { 1 };
+enum class BoundInfo : char {
+    NONSTRICT = 0,
+    STRICT = 1,
+    INFINITE = 2,
+};
 
 struct LABoundRef
 {

@@ -48,7 +48,7 @@ void
 LRAModel::pushBound(const LABoundRef br) {
     LABound& b = bs[br];
     LVRef vr = b.getLVRef();
-    if (b.getType() == bound_u) {
+    if (b.getType() == BoundType::UPPER) {
         int_ubounds[getVarId(vr)].push(br);
     }
     else
@@ -64,7 +64,7 @@ LRAModel::popBounds()
         LABoundRef br = bound_trace[i];
         LABound &b = bs[br];
         LVRef vr = b.getLVRef();
-        if (b.getType() == bound_u) {
+        if (b.getType() == BoundType::UPPER) {
             int_ubounds[getVarId(vr)].pop();
         } else {
             int_lbounds[getVarId(vr)].pop();
@@ -105,14 +105,14 @@ bool LRAModel::isEquality(LVRef v) const
     return lb.getIdx().x+1 == ub.getIdx().x && !lb.isInf() && !lb.isInf() && lb.hasSameValueAs(ub);
 }
 bool LRAModel::isUnbounded(LVRef v) const { return bs.isUnbounded(v); }
-bool LRAModel::boundSatisfied(LVRef v, LABoundRef b) const { return ((bs[b].getType() == bound_u) && bs[b].getIdx().x >= readUBound(v).getIdx().x) || ((bs[b].getType() == bound_l) && bs[b].getIdx().x <= readLBound(v).getIdx().x); }
+bool LRAModel::boundSatisfied(LVRef v, LABoundRef b) const { return ((bs[b].getType() == BoundType::UPPER) && bs[b].getIdx().x >= readUBound(v).getIdx().x) || ((bs[b].getType() == BoundType::LOWER) && bs[b].getIdx().x <= readLBound(v).getIdx().x); }
 bool LRAModel::boundUnsatisfied(LVRef v, LABoundRef b) const
 {
-    // return ((bs[b].getType() == bound_l) && (bs[b].getIdx().x > readUBound(v).getIdx().x && bs[b].getValue() != Ub(v))) ||
-    //     ((bs[b].getType() == bound_u) && (bs[b].getIdx().x < readLBound(v).getIdx().x && bs[b].getValue() != Lb(v)));
+    // return ((bs[b].getType() == BoundType::LOWER) && (bs[b].getIdx().x > readUBound(v).getIdx().x && bs[b].getValue() != Ub(v))) ||
+    //     ((bs[b].getType() == BoundType::UPPER) && (bs[b].getIdx().x < readLBound(v).getIdx().x && bs[b].getValue() != Lb(v)));
     const LABound& bound = bs[b];
-    assert(bound.getType() == bound_l || bound.getType() == bound_u);
-    bool is_lower = bound.getType() == bound_l;
+    assert(bound.getType() == BoundType::LOWER || bound.getType() == BoundType::UPPER);
+    bool is_lower = bound.getType() == BoundType::LOWER;
     const LABound& toCompare = is_lower ? readUBound(v) : readLBound(v);
     return (is_lower ? bound.getIdx().x > toCompare.getIdx().x : bound.getIdx().x < toCompare.getIdx().x)
             && !bound.hasSameValueAs(toCompare);

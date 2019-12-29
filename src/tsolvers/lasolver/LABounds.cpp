@@ -1,12 +1,22 @@
 #include "LABounds.h"
 #include "LRALogic.h"
 
-LABound::LABound(BoundT type, LVRef var, const Delta& delta, int id)
-    : type(type.t)
+LABound::LABound(BoundType type, LVRef var, int id, Real val, bool strict)
+    : type(type)
     , bidx(UINT32_MAX)
     , id(id)
     , var(var)
-    , delta(delta)
+    , boundVal(val)
+    , info(strict ? BoundInfo::STRICT : BoundInfo::NONSTRICT)
+{}
+
+LABound::LABound(BoundType type, LVRef var, int id, Infinity inf)
+    : type(type)
+    , bidx(UINT32_MAX)
+    , id(id)
+    , var(var)
+    , boundVal(0)
+    , info(BoundInfo::INFINITE)
 {}
 
 char* LABound::print() const
@@ -20,22 +30,20 @@ char* LABound::print() const
     assert(written >= 0); (void)written;
     free(v_str_lvr);
 
-    const Delta & d = this->delta;
-    if (d.isMinusInf())
+    if (this->isMinusInf())
         written = asprintf(&str_out, "- Inf <= %s", v_str);
-    else if (d.isPlusInf())
+    else if (this->isPlusInf())
         written = asprintf(&str_out, "%s <= + Inf", v_str);
     else {
-        opensmt::Real r = d.R();
-        opensmt::Real s = d.D();
-        BoundT type = this->getType();
-        if ((type == bound_l) && (s == 0))
+        opensmt::Real r = boundVal;
+        opensmt::Real s = info == BoundInfo::NONSTRICT ? 0 : type == BoundType::LOWER ? 1 : -1;
+        if ((type == BoundType::LOWER) && (s == 0))
             written = asprintf(&str_out, "%s <= %s", r.get_str().c_str(), v_str);
-        if ((type == bound_l) && (s != 0))
+        if ((type == BoundType::LOWER) && (s != 0))
             written = asprintf(&str_out, "%s < %s", r.get_str().c_str(), v_str);
-        if ((type == bound_u) && (s == 0))
+        if ((type == BoundType::UPPER) && (s == 0))
             written = asprintf(&str_out, "%s <= %s", v_str, r.get_str().c_str());
-        if ((type == bound_u) && (s != 0))
+        if ((type == BoundType::UPPER) && (s != 0))
             written = asprintf(&str_out, "%s < %s", v_str, r.get_str().c_str());
     }
     assert(written >= 0); (void)written;
@@ -43,11 +51,19 @@ char* LABound::print() const
     return str_out;
 }
 
-LABoundRef LABoundAllocator::alloc(BoundT type, LVRef var, const Delta& delta)
+LABoundRef LABoundAllocator::alloc(BoundType type, LVRef var, Real val, bool strict)
 {
     uint32_t v = RegionAllocator<uint32_t>::alloc(laboundWord32Size());
     LABoundRef id = {v};
-    new (lea(id)) LABound(type, var, delta, n_bounds++);
+    new (lea(id)) LABound(type, var, n_bounds++, std::move(val), strict);
+    return id;
+}
+
+LABoundRef LABoundAllocator::alloc(BoundType type, LVRef var, LABound::Infinity inf)
+{
+    uint32_t v = RegionAllocator<uint32_t>::alloc(laboundWord32Size());
+    LABoundRef id = {v};
+    new (lea(id)) LABound(type, var, n_bounds++, inf);
     return id;
 }
 
@@ -132,8 +148,8 @@ void LABoundStore::buildBounds()
     bounds_map.getKeys(keys);
     for (int i = 0; i < keys.size(); i++) {
         vec<LABoundRef> refs;
-        LABoundRef lb_minusInf = ba.alloc(bound_l, keys[i], Delta_MinusInf);
-        LABoundRef ub_plusInf = ba.alloc(bound_u, keys[i], Delta_PlusInf);
+        LABoundRef lb_minusInf = ba.alloc(BoundType::LOWER, keys[i], LABound::Infinity{});
+        LABoundRef ub_plusInf = ba.alloc(BoundType::UPPER, keys[i], LABound::Infinity{});
         refs.push(lb_minusInf);
         refs.push(ub_plusInf);
         for (int j = 0; j < bounds_map[keys[i]].size(); j++) {
@@ -191,8 +207,8 @@ void LABoundStore::buildBounds()
 
         if (var_bound_lists[id] == LABoundListRef_Undef) {
             vec<LABoundRef> refs;
-            LABoundRef lb_minusInf = ba.alloc(bound_l, ref, Delta_MinusInf);
-            LABoundRef ub_plusInf = ba.alloc(bound_u, ref, Delta_PlusInf);
+            LABoundRef lb_minusInf = ba.alloc(BoundType::LOWER, keys[i], LABound::Infinity{});
+            LABoundRef ub_plusInf = ba.alloc(BoundType::UPPER, keys[i], LABound::Infinity{});
             refs.push(lb_minusInf);
             refs.push(ub_plusInf);
             LABoundListRef br = bla.alloc(ref, refs);

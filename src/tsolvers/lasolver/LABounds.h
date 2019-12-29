@@ -17,34 +17,85 @@
 
 class LABound
 {
-    char type;    // Upper / lower
+    BoundType type;    // Upper / lower
     int bidx;     // The index in variable's bound list
     int id;       // The unique id of the bound
     LVRef var;
-    Delta delta;
+    FastRational boundVal;
+    BoundInfo info;
+
+    Delta toDelta() const {
+        if (info == BoundInfo::INFINITE) {
+            return isUpper() ? Delta_PlusInf : Delta_MinusInf;
+        }
+        if (info == BoundInfo::NONSTRICT) {
+            return Delta(boundVal, 0);
+        }
+        assert(info == BoundInfo::STRICT);
+        return Delta(boundVal, isUpper() ? -1 : 1);
+    }
+
+    bool isUpper() const { return type == BoundType::UPPER; }
 public:
+    struct Infinity {};
+
     struct BLIdx { int x; };
-    LABound(BoundT type, LVRef var, const Delta& delta, int id);
+    LABound(BoundType type, LVRef var, int id, Real val, bool strict);
+    LABound(BoundType type, LVRef var, int id, Infinity inf);
     inline void setIdx(BLIdx i)  { bidx = i.x; }
     inline BLIdx getIdx() const { return {bidx}; }
-    bool isUpperFor(Delta const & val) const { return val <= delta; }
-    bool isLowerFor(Delta const & val) const { return val >= delta; }
-    bool isStrictUpperFor(Delta const & val) const { return val < delta; }
-    bool isStrictLowerFor(Delta const & val) const { return val > delta; }
+    bool isUpperFor(Delta const & val) const {
+        assert(type == BoundType::UPPER);
+        return (info == BoundInfo::INFINITE)
+        || (val.R() < boundVal)
+        || (val.R() == boundVal && val.D() < 0)
+        || (val.R() == boundVal && val.D() == 0 && info == BoundInfo::NONSTRICT);
+    }
+    bool isLowerFor(Delta const & val) const {
+        assert(type == BoundType::LOWER);
+        return info == BoundInfo::INFINITE || val.R() > boundVal
+               || (val.R() == boundVal && val.D() > 0)
+               || (val.R() == boundVal && val.D() == 0 && info == BoundInfo::NONSTRICT);
+    }
+    bool isStrictUpperFor(Delta const & val) const {
+        assert(type == BoundType::UPPER);
+        return info == BoundInfo::INFINITE || val.R() < boundVal
+               || (val.R() == boundVal && val.D() < 0 && info == BoundInfo::NONSTRICT);
+    }
+    bool isStrictLowerFor(Delta const & val) const {
+        assert(type == BoundType::LOWER);
+        return info == BoundInfo::INFINITE || val.R() > boundVal
+               || (val.R() == boundVal && val.D() > 0 && info == BoundInfo::NONSTRICT);
+    }
 
-    inline BoundT getType() const { return { type }; }
+    inline BoundType getType() const { return type; }
     inline LVRef getLVRef() const { return var; }
     int getId() const { return id; }
     char* print() const;
-    bool isMinusInf() const { return delta.isMinusInf(); }
-    bool isPlusInf()  const { return delta.isPlusInf(); }
-    bool isInf()      const { return delta.isInf(); }
-    Delta getDiff(Delta const& val) const { return delta - val; }
-    char* printValue() const { return delta.printValue(); }
-    bool hasSameValueAs(LABound const & other) const { return this->delta == other.delta; }
-    inline Real getValue() const { return delta.R(); }
+    bool isMinusInf() const { return isInf() && type == BoundType::LOWER; }
+    bool isPlusInf()  const { return isInf() && type == BoundType::UPPER; }
+    bool isInf()      const { return info == BoundInfo::INFINITE; }
+    Delta getDiffToMatch(Delta const& val) const {
+        assert(info != BoundInfo::INFINITE);
+        if (info == BoundInfo::NONSTRICT) {
+            return Delta(boundVal - val.R(), - val.D());
+        }
+        bool upper = type == BoundType::UPPER;
+        Real deltaDiff = [&]() -> Real {
+           if (val.D().isZero()) { return upper ? -1 : 1; }
+           if ((val.D() < 0) == upper) { return 0; }
+           return (upper ? Real(-1) : Real(1)) - val.D();
+        }();
+        return Delta(boundVal - val.R(), deltaDiff);
+//        return delta - val;
+    }
+    char* printValue() const { return toDelta().printValue(); }
+    bool hasSameValueAs(LABound const & other) const { return this->toDelta() == other.toDelta(); }
+    inline Real getValue() const { return boundVal; }
 
-    inline friend bool operator<( const LABound &a, const LABound &b ) { return a.delta < b.delta; }
+    inline friend bool operator<( const LABound &a, const LABound &b ) {
+        return a.toDelta() < b.toDelta();
+    }
 };
 
 class LABoundAllocator : public RegionAllocator<uint32_t>
@@ -57,7 +108,8 @@ public:
     LABoundAllocator() : n_bounds(0) {}
     inline unsigned getNumBounds() const;// { return n_bounds; }
 
-    LABoundRef alloc(BoundT type, LVRef var, const Delta& delta);
+    LABoundRef alloc(BoundType type, LVRef var, Real val, bool strict);
+    LABoundRef alloc(BoundType type, LVRef var, LABound::Infinity inf);
     inline LABound&       operator[](LABoundRef r)       { return (LABound&)RegionAllocator<uint32_t>::operator[](r.x); }
     inline const LABound& operator[](LABoundRef r) const { return (LABound&)RegionAllocator<uint32_t>::operator[](r.x); }
     inline LABound*       lea       (LABoundRef r);
@@ -150,8 +202,8 @@ public:
     bool isUnbounded(LVRef v) const;
     // Construct an upper bound v ~ c and its negation \neg (v ~ c), where ~ is < if strict and <= if !strict
     BoundInfo allocBoundPair(LVRef v, const opensmt::Real& c, bool strict) {
-        LABoundRef ub = ba.alloc(bound_u, v, strict ? Delta(c, -1) : Delta(c));
-        LABoundRef lb = ba.alloc(bound_l, v, strict ? Delta(c) : Delta(c, 1));
+        LABoundRef ub = ba.alloc(BoundType::UPPER, v, c, strict);
+        LABoundRef lb = ba.alloc(BoundType::LOWER, v, c, !strict);
         in_bounds.push(BoundInfo{v, ub, lb});
         return in_bounds.last();
     }

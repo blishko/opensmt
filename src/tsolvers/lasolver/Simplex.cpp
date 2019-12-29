@@ -7,11 +7,11 @@
 // MB: helper functions
 namespace{
     bool isBoundSatisfied(Delta const & val, LABound const & bound ) {
-        if (bound.getType() == bound_u){
+        if (bound.getType() == BoundType::UPPER){
             return bound.isUpperFor(val);
         }
         else {
-            assert(bound.getType() == bound_l);
+            assert(bound.getType() == BoundType::LOWER);
             return bound.isLowerFor(val);
         }
     }
@@ -231,8 +231,8 @@ Simplex::Explanation Simplex::assertBoundOnVar(LVRef it, LABoundRef itBound_ref)
     // Check if simple UNSAT can be given.  The last check checks that this is not actually about asserting equality.
     if (model->boundUnsatisfied(it, itBound_ref))
     {
-        assert(itBound.getType() == bound_u || itBound.getType() == bound_l);
-        LABoundRef br = itBound.getType() == bound_u ? model->readLBoundRef(it) : model->readUBoundRef(it);
+        assert(itBound.getType() == BoundType::UPPER || itBound.getType() == BoundType::LOWER);
+        LABoundRef br = itBound.getType() == BoundType::UPPER ? model->readLBoundRef(it) : model->readUBoundRef(it);
         return {{br, 1}, {itBound_ref, 1}};
     }
 
@@ -247,7 +247,7 @@ Simplex::Explanation Simplex::assertBoundOnVar(LVRef it, LABoundRef itBound_ref)
     // Update the Tableau data if a non-basic variable
     if (tableau.isNonBasic(it)) {
         if (!isBoundSatisfied(model->read(it), itBound)) {
-            changeValueBy(it, itBound.getDiff(model->read(it)));
+            changeValueBy(it, itBound.getDiffToMatch(model->read(it)));
         }
     }
     else // basic variable got a new bound, it becomes a possible candidate
@@ -323,7 +323,7 @@ void Simplex::updateValues(const LVRef bv, const LVRef nv){
     auto const & boundToFix = (isModelOutOfLowerBound(bv)) ? model->readLBound(bv) : model->readUBound(bv);
     const auto & coeff = tableau.getCoeff(bv, nv);
     // nvDiff represents how much we need to change nv, so that bv gets to the right value
-    auto nvDiff = boundToFix.getDiff(model->read(bv)) / coeff;
+    auto nvDiff = boundToFix.getDiffToMatch(model->read(bv)) / coeff;
     // update nv's value
     changeValueBy(nv, nvDiff);
 }

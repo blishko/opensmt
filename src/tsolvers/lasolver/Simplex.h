@@ -138,15 +138,15 @@ public:
         auto const& val = model->read(var);
         bool positive = false;
         auto const& positive_bound = this->boundStore[pos];
-        if ((positive_bound.getType() == bound_l && positive_bound.isLowerFor(val))
-            || (positive_bound.getType() == bound_u && positive_bound.isUpperFor(val))) {
+        if ((positive_bound.getType() == BoundType::LOWER && positive_bound.isLowerFor(val))
+            || (positive_bound.getType() == BoundType::UPPER && positive_bound.isUpperFor(val))) {
             // The current value of the variable is consistent with the positive bound
             positive = true;
         }
         bool negative = false;
         auto const& negative_bound = this->boundStore[neg];
-        if ((negative_bound.getType() == bound_l && negative_bound.isLowerFor(val))
-            || (negative_bound.getType() == bound_u && negative_bound.isUpperFor(val))) {
+        if ((negative_bound.getType() == BoundType::LOWER && negative_bound.isLowerFor(val))
+            || (negative_bound.getType() == BoundType::UPPER && negative_bound.isUpperFor(val))) {
             // The current value of the variable is consistent with the negative bound
             negative = true;
         }
