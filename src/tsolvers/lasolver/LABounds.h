@@ -27,7 +27,6 @@ public:
     LABound(BoundT type, LVRef var, const Delta& delta, int id);
     inline void setIdx(BLIdx i)  { bidx = i.x; }
     inline BLIdx getIdx() const { return {bidx}; }
-//    inline const Delta& getValue() const { return delta; }
     bool isUpperFor(Delta const & val) const { return val <= delta; }
     bool isLowerFor(Delta const & val) const { return val >= delta; }
     bool isStrictUpperFor(Delta const & val) const { return val < delta; }
@@ -43,6 +42,7 @@ public:
     Delta getDiff(Delta const& val) const { return delta - val; }
     char* printValue() const { return delta.printValue(); }
     bool hasSameValueAs(LABound const & other) const { return this->delta == other.delta; }
+    inline Real getValue() const { return delta.R(); }
 
     inline friend bool operator<( const LABound &a, const LABound &b ) { return a.delta < b.delta; }
 };

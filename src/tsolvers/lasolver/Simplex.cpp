@@ -466,11 +466,11 @@ opensmt::Real Simplex::computeDelta() const {
 
         auto const & val = model->read(v);
         // Computing delta to satisfy lower bound
-        auto const & lb = model->Lb(v);
-        if (!lb.isMinusInf()) {
-            assert(lb.R() <= val.R());
-            if (lb.R() < val.R() && lb.D() > val.D()) {
-                Real valOfDelta = (val.R() - lb.R()) / (lb.D() - val.D());
+        auto const & lbound = model->readLBound(v);
+        if (!lbound.isMinusInf()) {
+            Real boundVal = lbound.getValue();
+            if (boundVal < val.R() && val.D() < 0) {
+                Real valOfDelta = (val.R() - boundVal) / (-val.D());
                 assert(valOfDelta > 0);
                 if (delta_abst > valOfDelta) {
                     delta_abst = valOfDelta;
@@ -478,11 +478,11 @@ opensmt::Real Simplex::computeDelta() const {
             }
         }
         // Computing delta to satisfy upper bound
-        auto const & ub = model->Ub(v);
-        if (!ub.isPlusInf()) {
-            assert(ub.R() >= val.R());
-            if (val.R() < ub.R() && val.D() > ub.D()) {
-                Real valOfDelta = (ub.R() - val.R()) / (val.D() - ub.D());
+        auto const & ubound = model->readUBound(v);
+        if (!ubound.isPlusInf()) {
+            Real boundVal = ubound.getValue();
+            if (val.R() < boundVal && val.D() > 0) {
+                Real valOfDelta = (boundVal - val.R()) / (val.D());
                 assert(valOfDelta > 0);
                 if (delta_abst > valOfDelta) {
                     delta_abst = valOfDelta;
@@ -490,7 +490,9 @@ opensmt::Real Simplex::computeDelta() const {
             }
         }
     }
-
+    // The value of delta_abst is computed to satisfy the non-strict version of the bounds
+    // To satisfy the strict versions, just decrease it slightly, so just it stays positive
+    assert(delta_abst > 0);
     if (delta_abst > 1) {
         return 1;
     }
