@@ -149,62 +149,64 @@ lbool LALogic::arithmeticElimination(const vec<PTRef> & top_level_arith, Map<PTR
         } else
             substitutions.insert(sub.first, PtAsgn(sub.second, l_True));
     } else {
-        // Otherwise obtain substitutions
-        // by means of Gaussian Elimination
-        //
-        // FORWARD substitution
-        // We put the matrix equalities into upper triangular form
-        //
-        for (int i = 0; i < equalities.size()-1; i++) {
-            LAExpression &s = *equalities[i];
-            // Solve w.r.t. first variable
-            if (s.solve( ) == PTRef_Undef) {
-                if (logic.isTrue(s.toPTRef())) continue;
-                assert(logic.isFalse(s.toPTRef()));
-                return l_False;
-            }
-            // Use the first variable x in s to generate a
-            // substitution and replace x in lac
-            for ( int j = i + 1 ; j < equalities.size( ) ; j ++ ) {
-                LAExpression & lac = *equalities[ j ];
-                combine( s, lac );
-            }
-        }
-        //
-        // BACKWARD substitution
-        // From the last equality to the first we put
-        // the matrix equalities into canonical form
-        //
-        for (int i = equalities.size() - 1; i >= 1; i--) {
-            LAExpression & s = *equalities[i];
-            // Solve w.r.t. first variable
-            if (s.solve() == PTRef_Undef) {
-                if (logic.isTrue(s.toPTRef())) continue;
-                assert(logic.isFalse(s.toPTRef()));
-                return l_False;
-            }
-            // Use the first variable x in s as a
-            // substitution and replace x in lac
-            for (int j = i - 1; j >= 0; j--) {
-                LAExpression& lac = *equalities[j];
-                combine(s, lac);
-            }
-        }
-        //
-        // Now, for each row we get a substitution
-        //
-        for (int i = 0 ;i < equalities.size(); i++) {
-            LAExpression& lae = *equalities[i];
-            pair<PTRef, PTRef> sub = lae.getSubst();
-            if (sub.first == PTRef_Undef) continue;
-            assert(sub.second != PTRef_Undef);
-            //cout << printTerm(sub.first) << " <- " << printTerm(sub.second) << endl;
-            if(!substitutions.has(sub.first)) {
-                substitutions.insert(sub.first, PtAsgn(sub.second, l_True));
-//                cerr << "; gaussian substitution: " << logic.printTerm(sub.first) << " -> " << logic.printTerm(sub.second) << endl;
-            } else {
-                if (isConstant(sub.second) && isConstant(sub.first) && (sub.second != substitutions[sub.first].tr))
+        if (false) {
+            // Otherwise obtain substitutions
+            // by means of Gaussian Elimination
+            //
+            // FORWARD substitution
+            // We put the matrix equalities into upper triangular form
+            //
+            for (uint32_t i = 0; i < equalities.size() - 1; i++) {
+                LAExpression & s = *equalities[i];
+                // Solve w.r.t. first variable
+                if (s.solve() == PTRef_Undef) {
+                    if (logic.isTrue(s.toPTRef())) continue;
+                    assert(logic.isFalse(s.toPTRef()));
                     return l_False;
+                }
+                // Use the first variable x in s to generate a
+                // substitution and replace x in lac
+                for (unsigned j = i + 1; j < equalities.size(); j++) {
+                    LAExpression & lac = *equalities[j];
+                    combine(s, lac);
+                }
+            }
+            //
+            // BACKWARD substitution
+            // From the last equality to the first we put
+            // the matrix equalities into canonical form
+            //
+            for (int i = equalities.size() - 1; i >= 1; i--) {
+                LAExpression & s = *equalities[i];
+                // Solve w.r.t. first variable
+                if (s.solve() == PTRef_Undef) {
+                    if (logic.isTrue(s.toPTRef())) continue;
+                    assert(logic.isFalse(s.toPTRef()));
+                    return l_False;
+                }
+                // Use the first variable x in s as a
+                // substitution and replace x in lac
+                for (int j = i - 1; j >= 0; j--) {
+                    LAExpression & lac = *equalities[j];
+                    combine(s, lac);
+                }
+            }
+            //
+            // Now, for each row we get a substitution
+            //
+            for (unsigned i = 0; i < equalities.size(); i++) {
+                LAExpression & lae = *equalities[i];
+                pair<PTRef, PTRef> sub = lae.getSubst();
+                if (sub.first == PTRef_Undef) continue;
+                assert(sub.second != PTRef_Undef);
+                //cout << printTerm(sub.first) << " <- " << printTerm(sub.second) << endl;
+                if (!substitutions.has(sub.first)) {
+                    substitutions.insert(sub.first, PtAsgn(sub.second, l_True));
+//                cerr << "; gaussian substitution: " << logic.printTerm(sub.first) << " -> " << logic.printTerm(sub.second) << endl;
+                } else {
+                    if (isConstant(sub.second) && isConstant(sub.first) && (sub.second != substitutions[sub.first].tr))
+                        return l_False;
+                }
             }
         }
     }
