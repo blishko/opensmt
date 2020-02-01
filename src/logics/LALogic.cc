@@ -5,6 +5,48 @@
 #include "LA.h"
 #include "LALogic.h"
 #include "FastRational.h"
+#include "LATerm.h"
+
+using Term = LATerm<PTRef, FastRational>;
+
+namespace{
+Term equalityToTerm(PTRef equality, LALogic& logic) {
+    assert(logic.isNumEq(equality));
+    PTRef lhs = logic.getPterm(equality)[0];
+    PTRef rhs = logic.getPterm(equality)[1];
+    PTRef ptterm = logic.mkNumMinus(lhs, rhs);
+    Pterm const & t = logic.getPterm(ptterm);
+    std::vector<Term::Factor> factors;
+    FastRational constantFactor = 0;
+    std::vector<PTRef> toProcess;
+    if (logic.isNumPlus(ptterm)) {
+        for (int i = 0; i < logic.getPterm(ptterm).size(); ++i ) {
+            toProcess.push_back(logic.getPterm(ptterm)[i]);
+        }
+    }
+    else {
+        toProcess.push_back(ptterm);
+    }
+    factors.reserve(toProcess.size());
+    for (int i = 0; i < toProcess.size(); ++i) {
+        PTRef ptfactor = toProcess[i];
+        PTRef var;
+        PTRef constant;
+        logic.splitTermToVarAndConst(ptfactor, var, constant);
+        if (var == PTRef_Undef) {
+            // constant factor
+            constantFactor = logic.getNumConst(constant);
+        } else {
+            // coeff * var
+            factors.emplace_back(var, logic.getNumConst(constant));
+        }
+    }
+    return Term(std::move(factors), std::move(constantFactor));
+
+}
+}
+
+
 bool LALogic::isNegated(PTRef tr) const {
     //static const opensmt::Integer zero = 0;
     if (isNumConst(tr))
@@ -111,108 +153,41 @@ PTRef LALogic::normalizeMul(PTRef mul)
 }
 lbool LALogic::arithmeticElimination(const vec<PTRef> & top_level_arith, Map<PTRef, PtAsgn, PTRefHash> & substitutions)
 {
-    vec<LAExpression*> equalities;
+    if (top_level_arith.size() == 0) { return l_Undef; }
     LALogic& logic = *this;
-    // I don't know if reversing the order makes any sense but osmt1
-    // does that.
-    for (int i = top_level_arith.size()-1; i >= 0; i--) {
-        equalities.push(new LAExpression(logic, top_level_arith[i]));
+    std::vector<Term> zeroTerms; // i.e. terms that should be equal to zero
+    zeroTerms.reserve(top_level_arith.size());
+    for (int i = 0; i < top_level_arith.size(); ++i) {
+//        std::cout << logic.printTerm(top_level_arith[i]) << std::endl;
+        zeroTerms.push_back(equalityToTerm(top_level_arith[i], logic));
     }
-#ifdef SIMPLIFY_DEBUG
-    for (int i = 0; i < equalities.size(); i++) {
-        cerr << "; ";
-        equalities[i]->print(cerr);
-        cerr << endl;
+    // Separate terms with single variable, i.e. equalities x = c for some constant c
+    auto begin = zeroTerms.begin();
+    auto end = zeroTerms.end();
+    auto mid = std::partition(begin, end,
+            [](Term const& term) { return term.getNumberOfVars() == 1; });
+    std::vector<std::pair<PTRef, FastRational>> constantSubstitutions;
+    for (auto it = begin; it != mid; ++it) {
+        // process all substitutions of constant for variable
+        Term const & term = *it;
+        assert(term.getNumberOfVars() == 1);
+        auto factorIt = term.getFactorIterator();
+        PTRef var = factorIt->var;
+        FastRational value = term.getConstantFactor() / factorIt->coeff;
+        constantSubstitutions.emplace_back(var, value);
     }
-#endif
-    //
-    // If just one equality, produce substitution right away
-    //
-    if ( equalities.size( ) == 0 )
-        ; // Do nothing
-    else if ( equalities.size( ) == 1 ) {
-        LAExpression & lae = *equalities[ 0 ];
-        if (lae.solve() == PTRef_Undef) {
-            // Constant substituted by a constant.  No new info from
-            // here.
-//            printf("there is something wrong here\n");
-            return l_Undef;
+    // Remember the substitutions and eliminate the variables from other
+    for (auto const & sub : constantSubstitutions) {
+        PTRef constantPTRef = logic.mkConst(sub.second);
+        PTRef var = sub.first;
+        if (substitutions.has(var) && logic.isConstant(substitutions[var].tr)) {
+            if (constantPTRef != substitutions[var].tr) { return l_False; }
         }
-        pair<PTRef, PTRef> sub = lae.getSubst();
-        assert( sub.first != PTRef_Undef );
-        assert( sub.second != PTRef_Undef );
-        if(substitutions.has(sub.first))
-        {
-            //cout << "ARITHMETIC ELIMINATION FOUND DOUBLE SUBSTITUTION:\n" << printTerm(sub.first) << " <- " << printTerm(sub.second) << " | " << printTerm(substitutions[sub.first].tr) << endl;
-            if(sub.second != substitutions[sub.first].tr)
-                return l_False;
-        } else
-            substitutions.insert(sub.first, PtAsgn(sub.second, l_True));
-    } else {
-        if (false) {
-            // Otherwise obtain substitutions
-            // by means of Gaussian Elimination
-            //
-            // FORWARD substitution
-            // We put the matrix equalities into upper triangular form
-            //
-            for (uint32_t i = 0; i < equalities.size() - 1; i++) {
-                LAExpression & s = *equalities[i];
-                // Solve w.r.t. first variable
-                if (s.solve() == PTRef_Undef) {
-                    if (logic.isTrue(s.toPTRef())) continue;
-                    assert(logic.isFalse(s.toPTRef()));
-                    return l_False;
-                }
-                // Use the first variable x in s to generate a
-                // substitution and replace x in lac
-                for (unsigned j = i + 1; j < equalities.size(); j++) {
-                    LAExpression & lac = *equalities[j];
-                    combine(s, lac);
-                }
-            }
-            //
-            // BACKWARD substitution
-            // From the last equality to the first we put
-            // the matrix equalities into canonical form
-            //
-            for (int i = equalities.size() - 1; i >= 1; i--) {
-                LAExpression & s = *equalities[i];
-                // Solve w.r.t. first variable
-                if (s.solve() == PTRef_Undef) {
-                    if (logic.isTrue(s.toPTRef())) continue;
-                    assert(logic.isFalse(s.toPTRef()));
-                    return l_False;
-                }
-                // Use the first variable x in s as a
-                // substitution and replace x in lac
-                for (int j = i - 1; j >= 0; j--) {
-                    LAExpression & lac = *equalities[j];
-                    combine(s, lac);
-                }
-            }
-            //
-            // Now, for each row we get a substitution
-            //
-            for (unsigned i = 0; i < equalities.size(); i++) {
-                LAExpression & lae = *equalities[i];
-                pair<PTRef, PTRef> sub = lae.getSubst();
-                if (sub.first == PTRef_Undef) continue;
-                assert(sub.second != PTRef_Undef);
-                //cout << printTerm(sub.first) << " <- " << printTerm(sub.second) << endl;
-                if (!substitutions.has(sub.first)) {
-                    substitutions.insert(sub.first, PtAsgn(sub.second, l_True));
-//                cerr << "; gaussian substitution: " << logic.printTerm(sub.first) << " -> " << logic.printTerm(sub.second) << endl;
-                } else {
-                    if (isConstant(sub.second) && isConstant(sub.first) && (sub.second != substitutions[sub.first].tr))
-                        return l_False;
-                }
-            }
+        else {
+            substitutions.insert(var, PtAsgn{constantPTRef, l_True});
         }
     }
-    // Clean constraints
-    for (int i = 0; i < equalities.size(); i++)
-        delete equalities[i];
+
     return l_Undef;
 }
 void LALogic::simplifyAndSplitEq(PTRef tr, PTRef& root_out)
@@ -402,6 +377,13 @@ PTRef LALogic::mkNumPlus(const std::vector<PTRef> &args) {
     return mkNumPlus(tmp);
 }
 
+PTRef LALogic::mkNumPlus(const PTRef p1, const PTRef p2) {
+    vec<PTRef> tmp;
+    tmp.push(p1);
+    tmp.push(p2);
+    return mkNumPlus(tmp);
+}
+
 PTRef LALogic::mkNumTimes(const vec<PTRef> &args) {
     char *msg;
     PTRef tr = mkNumTimes(args, &msg);
@@ -467,11 +449,7 @@ PTRef LALogic::mkNumMinus(const vec<PTRef>& args_in, char** msg)
         return mkNumNeg(args[0], msg);
     }
     assert (args.size() == 2);
-    PTRef mo = mkConst(getSort_num(), "-1");
-    if (mo == PTRef_Undef) {
-        printf("Error: %s\n", *msg);
-        assert(false);
-    }
+    PTRef mo = getTerm_NumMinusOne();
     vec<PTRef> tmp;
     tmp.push(mo);
     tmp.push(args[1]);

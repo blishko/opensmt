@@ -209,6 +209,11 @@ TEST_F(ArithmeticExpressions_test, test_Inequality_Constant)
     ASSERT_EQ(logic.mkNumGeq(a, sum), logic.getTerm_false());
 }
 
+TEST_F(ArithmeticExpressions_test, test_SimpleMinus)
+{
+    PTRef sum = logic.mkNumPlus(x,y);
+    ASSERT_EQ(x, logic.mkNumMinus(sum, y));
+}
 
 
 

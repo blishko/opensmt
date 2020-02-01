@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 #include <Logic.h>
+#include <LRALogic.h>
 #include <SMTConfig.h>
 
 class GetFactsTest : public ::testing::Test {
@@ -207,4 +208,29 @@ TEST_F(ApplySubstitutionTest, test_NestedSub) {
     logic.varsubstitute(fla, subst, res);
 //    EXPECT_EQ(res, logic.getTerm_true()); // MB: This requires something like fixed-point substitution
     EXPECT_EQ(res, logic.mkEq(fy, logic.mkUninterpFun(f, {fz})));
+}
+
+class LAApplySubstitutionTest : public ::testing::Test {
+protected:
+    LAApplySubstitutionTest(): logic{config} {}
+    virtual void SetUp() {
+        x = logic.mkNumVar("x");
+        y = logic.mkNumVar("y");
+        z = logic.mkNumVar("z");
+    }
+    SMTConfig config;
+    LRALogic logic;
+    SRef ufsort;
+    PTRef x;
+    PTRef y;
+    PTRef z;
+};
+
+TEST_F(LAApplySubstitutionTest, test_ConstantForVarSubstitution) {
+    PTRef sum = logic.mkNumPlus(x, logic.getTerm_NumOne());
+    Map<PTRef, PtAsgn, PTRefHash> subst;
+    subst.insert(x, PtAsgn{logic.getTerm_NumZero(), l_True});
+    PTRef res;
+    logic.varsubstitute(sum, subst, res);
+    EXPECT_EQ(res, logic.getTerm_NumOne());
 }
