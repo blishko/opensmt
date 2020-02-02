@@ -20,8 +20,8 @@ Term equalityToTerm(PTRef equality, LALogic& logic) {
     FastRational constantFactor = 0;
     std::vector<PTRef> toProcess;
     if (logic.isNumPlus(ptterm)) {
-        for (int i = 0; i < logic.getPterm(ptterm).size(); ++i ) {
-            toProcess.push_back(logic.getPterm(ptterm)[i]);
+        for (int i = 0; i < t.size(); ++i ) {
+            toProcess.push_back(t[i]);
         }
     }
     else {
@@ -158,7 +158,6 @@ lbool LALogic::arithmeticElimination(const vec<PTRef> & top_level_arith, Map<PTR
     std::vector<Term> zeroTerms; // i.e. terms that should be equal to zero
     zeroTerms.reserve(top_level_arith.size());
     for (int i = 0; i < top_level_arith.size(); ++i) {
-//        std::cout << logic.printTerm(top_level_arith[i]) << std::endl;
         zeroTerms.push_back(equalityToTerm(top_level_arith[i], logic));
     }
     // Separate terms with single variable, i.e. equalities x = c for some constant c
@@ -173,7 +172,7 @@ lbool LALogic::arithmeticElimination(const vec<PTRef> & top_level_arith, Map<PTR
         assert(term.getNumberOfVars() == 1);
         auto factorIt = term.getFactorIterator();
         PTRef var = factorIt->var;
-        FastRational value = term.getConstantFactor() / factorIt->coeff;
+        FastRational value = -term.getConstantFactor() / factorIt->coeff;
         constantSubstitutions.emplace_back(var, value);
     }
     // Remember the substitutions and eliminate the variables from other
