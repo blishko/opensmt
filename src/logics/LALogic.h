@@ -163,6 +163,10 @@ public:
     // MB: In pure LA, there are never nested boolean terms
     virtual vec<PTRef> getNestedBoolRoots (PTRef)  const override { return vec<PTRef>(); }
 
+private:
+    // Helper method for various versions of creating constants
+    PTRef createConstantInternal(const char* value);
+
 };
 // Determine for two multiplicative terms (* k1 v1) and (* k2 v2), v1 !=
 // v2 which one is smaller, based on the PTRef of v1 and v2.  (i.e.
