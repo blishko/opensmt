@@ -43,5 +43,30 @@ public:
 
     const_iterator getFactorIteratorEnd() const { return variableFactors.cend(); }
 
+    void normalizeFor(TVar var) {
+        auto pos = std::find_if(variableFactors.begin(), variableFactors.end(),
+                [var](const Factor& factor) { return factor.var == var; });
+        assert(pos != variableFactors.end());
+        std::iter_swap(variableFactors.begin(), pos);
+        TCoeff coeff = variableFactors.begin()->coeff;
+        for (Factor & factor : variableFactors) {
+            factor.coeff = factor.coeff / coeff;
+        }
+        constantFactor = constantFactor / coeff;
+    }
+
+    LATerm<TVar,TCoeff> solveFor(TVar var) {
+        auto pos = std::find_if(variableFactors.begin(), variableFactors.end(),
+                                [var](const Factor& factor) { return factor.var == var; });
+        assert(pos != variableFactors.end());
+        std::iter_swap(variableFactors.begin(), pos);
+        TCoeff coeff = -variableFactors.begin()->coeff;
+        std::vector<Factor> solvedFactors;
+        solvedFactors.reserve(variableFactors.size() - 1);
+        std::transform(variableFactors.begin() + 1, variableFactors.end(), std::back_inserter(solvedFactors),
+                [&coeff](Factor const& f) { return Factor(f.var, f.coeff/coeff); });
+        return LATerm(std::move(solvedFactors), constantFactor / coeff);
+    }
+
 };
 #endif //OPENSMT_LATERM_H

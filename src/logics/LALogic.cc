@@ -165,28 +165,49 @@ lbool LALogic::arithmeticElimination(const vec<PTRef> & top_level_arith, Map<PTR
     auto end = zeroTerms.end();
     auto mid = std::partition(begin, end,
             [](Term const& term) { return term.getNumberOfVars() == 1; });
-    std::vector<std::pair<PTRef, FastRational>> constantSubstitutions;
-    for (auto it = begin; it != mid; ++it) {
-        // process all substitutions of constant for variable
-        Term const & term = *it;
-        assert(term.getNumberOfVars() == 1);
-        auto factorIt = term.getFactorIterator();
-        PTRef var = factorIt->var;
-        FastRational value = -term.getConstantFactor() / factorIt->coeff;
-        constantSubstitutions.emplace_back(var, value);
-    }
-    // Remember the substitutions and eliminate the variables from other
-    for (auto const & sub : constantSubstitutions) {
-        PTRef constantPTRef = logic.mkConst(sub.second);
-        PTRef var = sub.first;
-        if (substitutions.has(var) && logic.isConstant(substitutions[var].tr)) {
-            if (constantPTRef != substitutions[var].tr) { return l_False; }
+    if (mid != begin) {
+        // At least one substitution of a constant for a variable!
+        std::vector<std::pair<PTRef, FastRational>> constantSubstitutions;
+        for (auto it = begin; it != mid; ++it) {
+            // process all substitutions of constant for variable
+            Term const & term = *it;
+            assert(term.getNumberOfVars() == 1);
+            auto factorIt = term.getFactorIterator();
+            PTRef var = factorIt->var;
+            FastRational value = -term.getConstantFactor() / factorIt->coeff;
+            constantSubstitutions.emplace_back(var, value);
         }
-        else {
-            substitutions.insert(var, PtAsgn{constantPTRef, l_True});
+        // Remember the substitutions and eliminate the variables from other
+        for (auto const & sub : constantSubstitutions) {
+            PTRef constantPTRef = logic.mkConst(sub.second);
+            PTRef var = sub.first;
+            if (substitutions.has(var) && logic.isConstant(substitutions[var].tr)) {
+                if (constantPTRef != substitutions[var].tr) { return l_False; }
+            } else {
+                substitutions.insert(var, PtAsgn{constantPTRef, l_True});
+            }
+        }
+        return l_Undef;
+    }
+    // Let's also apply substitution for equalities of form "x = ky + c"
+    begin = mid;
+    mid = std::partition(begin, end,
+                              [](Term const& term) { return term.getNumberOfVars() == 2; });
+    if (mid != begin) {
+        for (auto it = begin; it != mid; ++it) {
+            Term & term = *it;
+            assert(term.getNumberOfVars() == 2);
+            PTRef var = term.getFactorIterator()->var;
+            if (substitutions.has(var)) { continue; }
+            Term sub = term.solveFor(var);
+            assert(sub.getNumberOfVars() == 1);
+            auto varFactor = *sub.getFactorIterator();
+            PTRef ptVarFactor = varFactor.coeff == 1 ? varFactor.var : logic.mkNumTimes(varFactor.var, logic.mkConst(varFactor.coeff));
+            FastRational constant = sub.getConstantFactor();
+            PTRef ptsub = constant.isZero() ?  ptVarFactor : logic.mkNumPlus(ptVarFactor, logic.mkConst(constant));
+            substitutions.insert(var, PtAsgn{ptsub, l_True});
         }
     }
-
     return l_Undef;
 }
 void LALogic::simplifyAndSplitEq(PTRef tr, PTRef& root_out)
