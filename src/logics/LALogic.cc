@@ -437,21 +437,6 @@ PTRef LALogic::mkNumNeg(PTRef tr, char** msg)
     return mkNumTimes(args);
 }
 
-PTRef  LALogic::mkConst(const opensmt::Number& c)
-{
-    std::string str = c.get_str(); // MB: I cannot store c.get_str().c_str() directly, since that is a pointer inside temporary object -> crash.
-    const char * val = str.c_str();
-    PTRef ptr = PTRef_Undef;
-    ptr = mkVar(getSort_num(), val);
-    // Store the value of the number as a real
-    SymId id = sym_store[getPterm(ptr).symb()].getId();
-    for (int i = numbers.size(); static_cast<unsigned int>(i) <= id; i++) { numbers.push(nullptr); }
-    if (numbers[id] == nullptr) { numbers[id] = new opensmt::Number(val); }
-    assert(c == *numbers[id]);
-    markConstant(id);
-    return ptr;
-}
-
 SRef   LALogic::getSort_num () const { return get_sort_NUM(); }
 PTRef  LALogic::mkConst  (const char* num) { return mkConst(getSort_num(), num); }
 PTRef  LALogic::mkNumVar (const char* name) { return mkVar(getSort_num(), name); }
@@ -844,6 +829,21 @@ PTRef LALogic::mkConst(const char *name, const char **msg)
 {
     return mkConst(getSort_num(), name);
 }
+
+// Helper method used in different overloads of mkConst
+PTRef LALogic::createConstantInternal(const char* value) {
+    PTRef ptr = PTRef_Undef;
+    ptr = mkVar(getSort_num(), value);
+    // Store the value of the number as a real
+    SymId id = sym_store[getPterm(ptr).symb()].getId();
+    for (int i = numbers.size(); i <= id; i++) { numbers.push(nullptr); }
+    if (numbers[id] == nullptr) { numbers[id] = new opensmt::Number(value); }
+    else { assert(opensmt::Number(value) == *numbers[id]); }
+    markConstant(id);
+    sym_store.setInterpreted(getPterm(ptr).symb());
+    return ptr;
+}
+
 PTRef LALogic::mkConst(SRef s, const char* name)
 {
     assert(strlen(name) != 0);
@@ -851,18 +851,18 @@ PTRef LALogic::mkConst(SRef s, const char* name)
     if (s == get_sort_NUM()) {
         char* rat;
         opensmt::stringToRational(rat, name);
-        ptr = mkVar(s, rat);
-        // Store the value of the number as a real
-        SymId id = sym_store[getPterm(ptr).symb()].getId();
-        for (int i = numbers.size(); static_cast<unsigned>(i) <= id; i++)
-            numbers.push(nullptr);
-        if (numbers[id] != nullptr) { delete numbers[id]; }
-        numbers[id] = new opensmt::Number(rat);
+        ptr = createConstantInternal(rat);
         free(rat);
-        markConstant(id);
     } else
         ptr = Logic::mkConst(s, name);
     return ptr;
+}
+
+PTRef LALogic::mkConst(const opensmt::Number& c)
+{
+    std::string str = c.get_str(); // MB: I cannot store c.get_str().c_str() directly, since that is a pointer inside temporary object -> crash.
+    const char * val = str.c_str();
+    return createConstantInternal(val);
 }
 /***********************************************************
  * Class defining simplifications

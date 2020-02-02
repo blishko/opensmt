@@ -210,6 +210,19 @@ TEST_F(ArithmeticExpressions_test, test_Inequality_Constant)
 }
 
 
+TEST_F(ArithmeticExpressions_test, test_SplitToNumAndConst_Const)
+{
+    PTRef one = logic.getTerm_NumOne();
+    PTRef two = logic.mkConst(2);
+    PTRef var;
+    PTRef cons;
+    logic.splitTermToVarAndConst(one, var, cons);
+    ASSERT_EQ(var, PTRef_Undef);
+    ASSERT_EQ(cons, one);
+    logic.splitTermToVarAndConst(two, var, cons);
+    ASSERT_EQ(var, PTRef_Undef);
+    ASSERT_EQ(cons, two);
+}
 
 
 
