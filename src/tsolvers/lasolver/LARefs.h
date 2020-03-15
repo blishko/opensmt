@@ -50,6 +50,10 @@ struct LVRefHash {
     uint32_t operator() (const LVRef& s) const {return s.x; }
 };
 
+struct LVRefPairHash {
+    uint32_t operator() (std::pair<LVRef, LVRef> p) const { return (p.first.x * 0x1f1f1f1f) ^ p.second.x; }
+};
+
 struct LVRefComp {
     bool operator()(LVRef a, LVRef b) const { return a.x < b.x; }
 };

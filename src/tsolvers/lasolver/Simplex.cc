@@ -5,6 +5,7 @@
 #include "Simplex.h"
 
 #include <limits>
+#include <unordered_set>
 
 // MB: helper functions
 namespace{
@@ -23,15 +24,20 @@ Simplex::Explanation Simplex::checkSimplex() {
 
     bool bland_rule = false;
     unsigned repeats = 0;
+    unsigned pivotPairRepeats = 0;
+//    auto switchToBland = 100 <= tableau.getNumOfCols() ? 100 : tableau.getNumOfCols();
+    auto switchToBland = tableau.getNumOfCols();
+    std::unordered_set<std::pair<LVRef, LVRef>, LVRefPairHash> pivotHashes;
+
 
     // keep doing pivotAndUpdate until the SAT/UNSAT status is confirmed
     while (true) {
         repeats++;
         LVRef x = LVRef_Undef;
 
-
-        if (!bland_rule && (repeats > tableau.getNumOfCols()))
+        if (!bland_rule && (repeats > switchToBland || (pivotPairRepeats > 10 && (pivotPairRepeats*10 > repeats)))) {
             bland_rule = true;
+        }
 
         if (bland_rule) {
             x = getBasicVarToFixByBland();
@@ -63,6 +69,12 @@ Simplex::Explanation Simplex::checkSimplex() {
             // if it was found - pivot old Basic x with non-basic y and do the model updates
         else {
             pivot(x, y_found);
+            if (!bland_rule) {
+                auto res = pivotHashes.insert(std::make_pair(x, y_found));
+                if (!res.second) {
+                    ++pivotPairRepeats;
+                }
+            }
         }
     }
 }
