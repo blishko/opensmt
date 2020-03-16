@@ -35,8 +35,10 @@ Simplex::Explanation Simplex::checkSimplex() {
         repeats++;
         LVRef x = LVRef_Undef;
 
-        if (!bland_rule && (repeats > switchToBland || (pivotPairRepeats > 10 && (pivotPairRepeats*10 > repeats)))) {
+        if (!bland_rule && (repeats > switchToBland || (pivotPairRepeats > 10 && (pivotPairRepeats*2 > repeats)))) {
             bland_rule = true;
+//            std::cout << "Switching to bland with " << repeats << " repeats\n";
+//            std::cout << "Because of " << (repeats > switchToBland ? "threshold reached" : "pivoting repetition") << std::endl;
         }
 
         if (bland_rule) {
