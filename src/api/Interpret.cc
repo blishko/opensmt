@@ -1312,9 +1312,9 @@ void Interpret::execute(const ASTNode* r) {
     auto i = r->children->begin();
     for (; i != r->children->end() && !f_exit; i++) {
         interp(**i);
-        delete *i;
-        *i = nullptr;
+        ASTNode::destroySubtree(*i);
     }
+    r->children->clear();
 }
 
 int Interpret::interpFile(FILE* in) {

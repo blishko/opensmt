@@ -74,7 +74,7 @@ class Smt2newContext {
 
     ~Smt2newContext() {
         destroy_scanner();
-        delete root;
+        ASTNode::destroySubtree(root);
         free(buffer);
     }
 

@@ -83,15 +83,29 @@ class ASTNode {
     std::vector< ASTNode* >*children;
     ASTNode(ASTType t, smt2token tok) : type(t), tok(tok), val(NULL), children(NULL) {}
     ASTNode(ASTType t, char* v) : type(t), tok({t_none}), val(v), children(NULL) {}
-    ~ASTNode() {
-        if (children) {
-            for (auto ci = children->begin(); ci != children->end(); ci++) {
-                delete *ci;
-            };
-            delete children;
+    static void destroySubtree(ASTNode* root) {
+        if (!root) { return; }
+        std::vector<ASTNode*> nodes;
+        nodes.push_back(root);
+        while(!nodes.empty()) {
+            auto* current = nodes.back();
+            assert(current);
+            nodes.pop_back();
+            if (current->children) {
+                for (auto n : *current->children) {
+                    nodes.push_back(n);
+                }
+            }
+            delete current;
         }
+    }
+private:
+    ~ASTNode() {
+        // NOTE: not explicitly calling destructor in children, since that could overflow the stack for large expressions
+        delete children;
         free(val);
     }
+public:
     void                   print(std::ostream& o, int indent);
     inline const char      *typeToStr() const { return typestr[type]; }
     inline ASTType         getType()   const { return type; }
