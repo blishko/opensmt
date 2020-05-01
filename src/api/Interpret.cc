@@ -549,39 +549,248 @@ PTRef Interpret::letNameResolve(const char* s, const vec<LetFrame>& let_branch) 
 // Typecheck the term structure.  Construct the terms.
 //
 PTRef Interpret::parseTerm(const ASTNode &term) {
-    vec<LetFrame> lets;
-    return parseTermRecursively(term, lets);
+//    vec<LetFrame> lets;
+//    return parseTermRecursively(term, lets);
+    return parseTermIterative(term);
 }
 
+PTRef Interpret::parseConstant(const ASTNode &term) {
+    const char* name = (**(term.children->begin())).getValue();
+    const char* msg;
+    vec<SymRef> params;
+    PTRef tr = logic->mkConst(name, &msg);
+    if (tr == PTRef_Undef)
+        comment_formatted("While processing %s: %s", name, msg);
+    return tr;
+}
+
+PTRef Interpret::parseSimpleTerm(const ASTNode &term, vec<LetFrame> &let_branch) {
+    const char* name = (**(term.children->begin())).getValue();
+//        comment_formatted("Processing term with symbol %s", name);
+    PTRef tr = letNameResolve(name, let_branch);
+    char* msg = NULL;
+    if (tr != PTRef_Undef) {
+//            comment_formatted("Found a let reference to term %d", tr);
+        return tr;
+    }
+    tr = logic->resolveTerm(name, vec_ptr_empty, &msg);
+    if (tr == PTRef_Undef)
+        comment_formatted("unknown qid term %s: %s", name, msg);
+    free(msg);
+    return tr;
+}
+
+namespace{
+struct SnapShot {
+    SnapShot(const ASTNode & pNode) : term{pNode}, it{term.children->begin()} {}
+    SnapShot(SnapShot&&) = default;
+    SnapShot(SnapShot const &) = delete;
+    ~SnapShot() {
+        for (int i = 0; i < names.size(); ++i) {
+            ::free(names[i]);
+        }
+    }
+
+    const ASTNode & term;
+    std::vector<ASTNode*>::const_iterator it;
+    std::vector<PTRef> children;
+    std::vector<char*> names;
+    bool final_phase = false;
+};
+}
+
+PTRef Interpret::parseTermIterative(const ASTNode &node) {
+    PTRef parsed = PTRef_Undef;
+    vec<LetFrame> let_frames;
+
+    std::vector<SnapShot> stack;
+    stack.emplace_back(node);
+    while (!stack.empty()) {
+        SnapShot current = std::move(stack.back());
+        stack.pop_back();
+        const ASTNode& current_node = current.term;
+
+        ASTType t = current_node.getType();
+        if (t == TERM_T) {
+            parsed = parseConstant(current_node);
+            continue;
+        }
+
+        else if (t == QID_T) {
+            parsed = parseSimpleTerm(current_node, let_frames);
+            continue;
+
+        } else if (t == LQID_T) {
+            // Multi-argument term
+            auto current_child = current.it;
+            // Parse the arguments
+            if (current_child == current_node.children->end()) {
+                if (parsed == PTRef_Undef) { return PTRef_Undef; }
+                current.children.push_back(parsed);
+                const char * name = (**current_node.children->begin()).getValue();
+                char * msg;
+                try {
+                    vec<PTRef> args;
+                    for (PTRef p : current.children) {
+                        args.push(p);
+                    }
+                    parsed = logic->resolveTerm(name, args, &msg);
+                }
+                catch (LADivisionByZeroException & ex) {
+                    notify_formatted(true, ex.what());
+                    parsed = PTRef_Undef;
+                    continue;
+                }
+                if (parsed == PTRef_Undef) {
+                    notify_formatted(true, "No such symbol %s: %s", name, msg);
+                    comment_formatted("The symbol %s is not defined for the following sorts:", name);
+                    for (int j = 0; j < current.children.size(); j++)
+                        comment_formatted("arg %d: %s", j, logic->getSortName(logic->getSortRef(
+                                current.children[j]))); //store.getName(symstore[ptstore[args[j]].symb()].rsort()));
+                    if (logic->hasSym(name)) {
+                        comment_formatted("candidates are:");
+                        const vec<SymRef> & trefs = logic->symNameToRef(name);
+                        for (int j = 0; j < trefs.size(); j++) {
+                            SymRef ctr = trefs[j];
+                            const Symbol & t = logic->getSym(ctr);
+                            comment_formatted(" candidate %d", j);
+                            for (uint32_t k = 0; k < t.nargs(); k++) {
+                                comment_formatted("  arg %d: %s", k, logic->getSortName(t[k]));
+                            }
+                        }
+                    } else
+                        comment_formatted("There are no candidates.");
+                    free(msg);
+                    // Error in parsing term, we can immediately return PTRef_Undef
+                    return PTRef_Undef;
+                }
+            } else {
+                // Not all children processed yet
+                if (current.it == current_node.children->begin()) {
+                    current.it += 2;
+                    current_child++;
+                }
+                else {
+                    current.children.push_back(parsed);
+                    current.it += 1;
+                }
+
+                // First, push the current node back to the stack
+                stack.push_back(std::move(current));
+                // Second push the child node to the stack
+                stack.emplace_back(**current_child);
+                continue;
+            }
+        }
+
+        else if (t == LET_T) {
+            if (!current.final_phase) {
+                auto ch = current_node.children->begin();
+                if (current.it == ch) {
+                    current.it = (**ch).children->begin();
+                }
+                else{
+                    // remember the result from last child
+                    if (parsed == PTRef_Undef) { return PTRef_Undef; }
+                    current.children.push_back(parsed);
+                }
+                if (current.it != (**ch).children->end()) {
+                    auto current_child = current.it;
+                    ++current.it;
+                    current.names.push_back(strdup((**current_child).getValue()));
+                    stack.push_back(std::move(current));
+
+                    stack.emplace_back(**((**current_child).children->begin()));
+                    continue;
+                } else {
+                    // all lets processed
+                    assert(current.names.size() == current.children.size());
+                    let_frames.push(); // The next scope, where my vars will be defined
+                    LetFrame & new_frame = let_frames.last();
+                    for (int i = 0; i < current.names.size(); i++) {
+                        char * name = current.names[i];
+                        PTRef letarg = current.children[i];
+                        if (addLetName(name, letarg, new_frame) == false) {
+                            comment_formatted("Let name addition failed");
+                            return PTRef_Undef;
+                        }
+                        assert(new_frame.contains(name));
+                    }
+                    current.final_phase = true;
+                    stack.push_back(std::move(current));
+
+                    stack.emplace_back(**(++ch));
+                    continue;
+                }
+            }
+            else {
+                // cleanup of parsing let
+                if (parsed == PTRef_Undef) {
+                    comment_formatted("Failed in parsing the let scoped term");
+                    return PTRef_Undef;
+                }
+                let_frames.pop(); // Now the scope is unavailable for us
+                // returning what has been returned to me
+                continue;
+            }
+        }
+
+        else if (t == BANG_T) {
+            assert(current_node.children->size() == 2);
+            auto ch = current_node.children->begin();
+
+            if (!current.final_phase) {
+                const ASTNode& named_term = **ch;
+                current.final_phase = true;
+                stack.push_back(std::move(current));
+
+                stack.emplace_back(named_term);
+                continue;
+            }
+            else {
+                // final phase
+                if (parsed == PTRef_Undef) { return PTRef_Undef; }
+                ASTNode& attr_l = **(++ ch);
+                assert(attr_l.getType() == GATTRL_T);
+                assert(attr_l.children->size() == 1);
+                ASTNode& name_attr = **(attr_l.children->begin());
+                if (strcmp(name_attr.getValue(), ":named") == 0) {
+                    ASTNode& sym = **(name_attr.children->begin());
+                    assert(sym.getType() == SYM_T);
+                    if (nameToTerm.has(sym.getValue())) {
+                        notify_formatted(true, "name %s already exists", sym.getValue());
+                        return PTRef_Undef;
+                    }
+                    char* name = strdup(sym.getValue());
+                    // MB: term_names becomes the owner of the string and is responsible for deleting
+                    term_names.push(name);
+                    nameToTerm.insert(name, parsed);
+                    if (!termToNames.has(parsed)) {
+                        vec<const char*> v;
+                        termToNames.insert(parsed, v);
+                    }
+                    termToNames[parsed].push(name);
+                }
+                continue;
+            }
+        }
+        else {
+            comment_formatted("Unknown term type");
+            return PTRef_Undef;
+        }
+    }
+
+    return parsed;
+}
 
 PTRef Interpret::parseTermRecursively(const ASTNode &term, vec<LetFrame> &let_branch) {
     ASTType t = term.getType();
     if (t == TERM_T) {
-        const char* name = (**(term.children->begin())).getValue();
-//        comment_formatted("Processing term %s", name);
-        const char* msg;
-        vec<SymRef> params;
-        //PTRef tr = logic->resolveTerm(name, vec_ptr_empty, &msg);
-        PTRef tr = logic->mkConst(name, &msg);
-        if (tr == PTRef_Undef)
-            comment_formatted("While processing %s: %s", name, msg);
-        return tr;
+        return parseConstant(term);
     }
 
     else if (t == QID_T) {
-        const char* name = (**(term.children->begin())).getValue();
-//        comment_formatted("Processing term with symbol %s", name);
-        PTRef tr = letNameResolve(name, let_branch);
-        char* msg = NULL;
-        if (tr != PTRef_Undef) {
-//            comment_formatted("Found a let reference to term %d", tr);
-            return tr;
-        }
-        tr = logic->resolveTerm(name, vec_ptr_empty, &msg);
-        if (tr == PTRef_Undef)
-            comment_formatted("unknown qid term %s: %s", name, msg);
-        free(msg);
-        return tr;
+        return parseSimpleTerm(term, let_branch);
     }
 
     else if ( t == LQID_T ) {
