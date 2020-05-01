@@ -363,8 +363,7 @@ void Interpret::interp(ASTNode& n) {
             if (logic != NULL) {
                 sstat status;
                 ASTNode& asrt = **(n.children->begin());
-                vec<LetFrame> let_branch;
-                PTRef tr = parseTerm(asrt, let_branch);
+                PTRef tr = parseTerm(asrt);
                 if (tr == PTRef_Undef)
                     notify_formatted(true, "assertion returns an unknown sort");
                 else {
@@ -549,11 +548,13 @@ PTRef Interpret::letNameResolve(const char* s, const vec<LetFrame>& let_branch) 
 //
 // Typecheck the term structure.  Construct the terms.
 //
-// TODO: left and right associativity, pairwisety - integrate these to the congruence algorithm,
-//       chainability - not yet implemented
-//       attributed terms - working now on this
+PTRef Interpret::parseTerm(const ASTNode &term) {
+    vec<LetFrame> lets;
+    return parseTermRecursively(term, lets);
+}
 
-PTRef Interpret::parseTerm(const ASTNode& term, vec<LetFrame>& let_branch) {
+
+PTRef Interpret::parseTermRecursively(const ASTNode &term, vec<LetFrame> &let_branch) {
     ASTType t = term.getType();
     if (t == TERM_T) {
         const char* name = (**(term.children->begin())).getValue();
@@ -590,7 +591,7 @@ PTRef Interpret::parseTerm(const ASTNode& term, vec<LetFrame>& let_branch) {
         const char* name = (**node_iter).getValue(); node_iter++;
         // Parse the arguments
         for (; node_iter != term.children->end(); node_iter++) {
-            PTRef arg_term = parseTerm(**node_iter, let_branch);
+            PTRef arg_term = parseTermRecursively(**node_iter, let_branch);
             if (arg_term == PTRef_Undef)
                 return PTRef_Undef;
             else
@@ -641,7 +642,7 @@ PTRef Interpret::parseTerm(const ASTNode& term, vec<LetFrame>& let_branch) {
         vec<char*> names;
         // First read the term declarations in the let statement
         while (vbl != (**ch).children->end()) {
-            PTRef let_tr = parseTerm(**((**vbl).children->begin()), let_branch);
+            PTRef let_tr = parseTermRecursively(**((**vbl).children->begin()), let_branch);
             if (let_tr == PTRef_Undef) return PTRef_Undef;
             tmp_args.push(let_tr);
             char* name = strdup((**vbl).getValue());
@@ -661,7 +662,7 @@ PTRef Interpret::parseTerm(const ASTNode& term, vec<LetFrame>& let_branch) {
         }
         ch++;
         // This is now constructed with the let declarations context in let_branch
-        PTRef tr = parseTerm(**(ch), let_branch);
+        PTRef tr = parseTermRecursively(**(ch), let_branch);
         if (tr == PTRef_Undef) {
             comment_formatted("Failed in parsing the let scoped term");
             for (int i = 0; i < names.size(); i++) free(names[i]);
@@ -682,7 +683,7 @@ PTRef Interpret::parseTerm(const ASTNode& term, vec<LetFrame>& let_branch) {
         assert(attr_l.children->size() == 1);
         ASTNode& name_attr = **(attr_l.children->begin());
 
-        PTRef tr = parseTerm(named_term, let_branch);
+        PTRef tr = parseTermRecursively(named_term, let_branch);
         if (tr == PTRef_Undef) return tr;
 
         if (strcmp(name_attr.getValue(), ":named") == 0) {
@@ -816,8 +817,7 @@ void Interpret::getValue(const std::vector<ASTNode*>* terms)
     vec<ValPair> values;
     for (auto term_it = terms->begin(); term_it != terms->end(); ++term_it) {
         const ASTNode& term = **term_it;
-        vec<LetFrame> tmp;
-        PTRef tr = parseTerm(term, tmp);
+        PTRef tr = parseTerm(term);
         if (tr != PTRef_Undef) {
             values.push(main_solver->getValue(tr));
             char* pt_str = logic->printTerm(tr);
@@ -1002,8 +1002,7 @@ bool Interpret::defineFun(const ASTNode& n)
     }
 
     sstat status;
-    vec<LetFrame> let_branch;
-    PTRef tr = parseTerm(term_node, let_branch);
+    PTRef tr = parseTerm(term_node);
     if (tr == PTRef_Undef) {
         notify_formatted(true, "define-fun returns an unknown sort");
         return false;
