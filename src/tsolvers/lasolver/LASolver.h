@@ -126,7 +126,7 @@ protected:
     LVRef exprToLVar(PTRef expr); // Ensures this term and all variables in it has corresponding LVAR.  Returns the LAVar for the term.
     void storeExplanation(Simplex::Explanation &&explanationBounds);
 
-    std::unique_ptr<Polynomial> expressionToLVarPoly(PTRef term);
+    std::unique_ptr<Tableau::Row> expressionToTableauRow(PTRef term);
 
     opensmt::Number getNum(PTRef);
 

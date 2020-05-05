@@ -37,7 +37,7 @@ void Polynomial::negate() {
     }
 }
 
-void Polynomial::divideBy(const opensmt::Real &r) {
+void Polynomial::divideBy(opensmt::Real r) {
     for(auto & term : poly) {
         term.coeff /= r;
     }

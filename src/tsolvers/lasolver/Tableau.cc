@@ -31,7 +31,7 @@ void Tableau::newNonbasicVar(LVRef v) {
     varTypes[getVarId(v)] = VarType::NONBASIC;
 }
 
-void Tableau::newRow(LVRef v, std::unique_ptr<Polynomial> poly) {
+void Tableau::newRow(LVRef v, std::unique_ptr<Row> poly) {
     assert(!isProcessed(v));
     ensureTableauReadyFor(v);
     addRow(v, std::move(poly));
@@ -44,13 +44,11 @@ std::size_t Tableau::getNumOfCols() const {
 }
 
 std::size_t Tableau::getPolySize(LVRef basicVar) const {
-    assert(rows[basicVar.x]);
-    return rows[basicVar.x]->size();
+    return getRowPoly(basicVar).size();
 }
 
 const opensmt::Real & Tableau::getCoeff(LVRef basicVar, LVRef nonBasicVar) const {
-    assert(rows[basicVar.x]);
-    return rows[basicVar.x]->getCoeff(nonBasicVar);
+    return getRowPoly(basicVar).getCoeff(nonBasicVar);
 }
 
 const Tableau::column_t & Tableau::getColumn(LVRef nonBasicVar) const {
@@ -59,14 +57,23 @@ const Tableau::column_t & Tableau::getColumn(LVRef nonBasicVar) const {
 }
 
 const Polynomial & Tableau::getRowPoly(LVRef basicVar) const {
+    return getRow(basicVar).getPoly();
+}
+
+Polynomial & Tableau::getRowPoly(LVRef basicVar) {
+    return getRow(basicVar).getPoly();
+}
+
+Tableau::Row & Tableau::getRow(LVRef basicVar) {
     assert(rows[basicVar.x]);
     return *rows[basicVar.x];
 }
 
-Polynomial & Tableau::getRowPoly(LVRef basicVar) {
+Tableau::Row const & Tableau::getRow(LVRef basicVar) const {
     assert(rows[basicVar.x]);
     return *rows[basicVar.x];
 }
+
 
 const Tableau::rows_t & Tableau::getRows() const {
     return rows;
@@ -83,18 +90,18 @@ std::vector<LVRef> Tableau::getNonBasicVars() const {
     return res;
 }
 
-void Tableau::addRow(LVRef v, std::unique_ptr<Polynomial> p) {
+void Tableau::addRow(LVRef v, std::unique_ptr<Row> p) {
     assert(!rows[v.x]);
     rows[v.x] = std::move(p);
 }
 
-std::unique_ptr<Polynomial> Tableau::removeRow(LVRef v) {
-    assert(rows[v.x]);
-    std::unique_ptr<Polynomial> res;
-    assert(!res);
-    res.swap(rows[v.x]);
-    return res;
-}
+//std::unique_ptr<Tableau::Row> Tableau::removeRow(LVRef v) {
+//    assert(rows[v.x]);
+//    std::unique_ptr<Row> res;
+//    assert(!res);
+//    res.swap(rows[v.x]);
+//    return res;
+//}
 
 void Tableau::moveRowFromTo(LVRef from, LVRef to) {
     assert(!rows[to.x]);
@@ -112,6 +119,84 @@ bool Tableau::isProcessed(LVRef v) const {
     return varTypes.size() > getVarId(v) && varTypes[getVarId(v)] != VarType::NONE;
 }
 
+/**
+ * Changes the row corresponding to basic variable bv so that now it corresponds to the non-basic variable nv, which
+ * is about to become the new basicc variable.
+ * After this method executes, bv has no row and nv has a row with correct polynomial representation and correct column indices
+ * (except the column still belongs to non-basic variable?!)
+ *
+ * @param bv Row variable
+ * @param nv Column variable
+ */
+void Tableau::updateRowFor(LVRef bv, LVRef nv) {
+    Row & row = getRow(bv);
+    Polynomial & poly = row.getPoly();
+    // locate the variable to replace
+    auto it = poly.findTermForVar(nv);
+    // remember the index for updating also the column indices
+    auto index = it - poly.begin();
+    auto columnIndex = row.getColumnIndices()[index];
+    // replace the variable
+    it->var = bv;
+    replaceRowFromColumnAtWith(columnIndex, nv, nv);
+    // update the coefficient -> normalize the polynomial so that the coeff at it is -1 and compute the new coeff
+    Real bvCoeff{1};
+    if (!isOne(it->coeff)) {
+        bvCoeff /= it->coeff;
+        poly.divideBy(it->coeff);
+    }
+    poly.negate();
+    it->coeff = std::move(bvCoeff);
+    // Now we need to restore the invariant that the terms are sorted
+    bool bubbleBackward = (bv.x < nv.x);
+    Polynomial::TermCmp cmp;
+    auto colIndIt = row.getColumnIndices().begin() + index;
+    if (bubbleBackward) {
+        while(it != poly.begin() && cmp(*it, *(it - 1))) {
+            std::iter_swap(it, it -1);
+            std::iter_swap(colIndIt, colIndIt - 1);
+            --it; --colIndIt;
+        }
+    }
+    else {
+        // bubbleForward
+        while(it + 1 != poly.end() && cmp(*(it + 1), *it)) {
+            std::iter_swap(it, it + 1);
+            std::iter_swap(colIndIt, colIndIt + 1);
+            ++it; ++colIndIt;
+        }
+    }
+    // Now the sorted invariant is restored
+#ifndef NDEBUG
+    assert(poly.size() == row.getColumnIndices().size());
+    assert(std::is_sorted(poly.begin(), poly.end(), cmp));
+    for(int i = 0; i < poly.size(); ++i) {
+        LVRef varInPoly = poly[i].var;
+        LVRef columnVar = varInPoly == bv ? nv : varInPoly;
+        LVRef expected = varInPoly == bv ? nv : bv;
+        Column const & column = getColumn(columnVar);
+        Column::Entry e = column[row.getColumnIndices()[i]];
+        assert(e.isValid() && Column::Entry::entryToLVRef(e) == expected);
+    }
+#endif //NDEBUG
+    // Move the row to the new variable that it corresponds to
+    moveRowFromTo(bv, nv);
+}
+
+std::pair<int, opensmt::Real> Tableau::removeVarFromRow(LVRef colVar, LVRef rowVar) {
+    Row & row = getRow(rowVar);
+    Polynomial & poly = row.getPoly();
+    auto it = poly.findTermForVar(colVar);
+    auto index = it - poly.begin();
+    auto colIndIt = row.getColumnIndices().begin() + index;
+    std::pair<int, opensmt::Real> res;
+    res.first = row.getColumnIndices()[index];
+    row.getColumnIndices().erase(colIndIt);
+    res.second = std::move(it->coeff);
+    poly.poly.erase(it);
+    return res;
+}
+
 void Tableau::pivot(LVRef bv, LVRef nv) {
     assert(isBasic(bv));
     assert(isNonBasic(nv));
@@ -119,56 +204,60 @@ void Tableau::pivot(LVRef bv, LVRef nv) {
     varTypes[getVarId(nv)] = VarType::BASIC;
     assert(cols[nv.x]);
     assert(!cols[bv.x]);
-    // compute the polynomial for nv
     assert(rows[bv.x]);
     assert(!rows[nv.x]);
-    {
-        Polynomial & nvPoly = getRowPoly(bv);
-        const auto coeff = nvPoly.removeVar(nv);
-        Real bvCoeff{1};
-        if (!isOne(coeff)) {
-            nvPoly.divideBy(coeff);
-            bvCoeff /= coeff;
-        }
-        nvPoly.negate();
-        nvPoly.addTerm(bv, bvCoeff);
-    }
 
-    // remove row for bv, add row for nv
-    moveRowFromTo(bv, nv);
-    // move the column from nv tto bv
+    // update row to correspond to nv instead of bv
+    updateRowFor(bv, nv);
+    // move the column from nv to bv
     moveColFromTo(nv, bv);
 
-    Polynomial & nvPoly = getRowPoly(nv);
-    // update column information regarding this one poly
-    for(auto & term : nvPoly) {
-        auto var = term.var;
-        assert(cols[var.x]);
-        removeRowFromColumn(bv, var);
-        addRowToColumn(nv, var);
+    {
+        auto const & row = getRow(nv);
+        assert(row.getPoly().size() == row.getColumnIndices().size());
+        auto termIt = row.getPoly().begin();
+        auto indIt = row.getColumnIndices().begin();
+        auto end = row.getPoly().end();
+        // update column information regarding this one poly
+        for (; termIt != end; ++termIt, ++indIt) {
+            auto var = termIt->var;
+            assert(cols[var.x]);
+            replaceRowFromColumnAtWith(*indIt, var, nv);
+//        removeRowFromColumn(bv, var);
+//        addRowToColumn(nv, var);
+        }
     }
     std::vector<Polynomial::Term> storage;
     // for all (active) rows containing nv, substitute
-    for (auto rowVar : getColumn(bv)) {
+    auto const & col = getColumn(bv);
+    auto size = col.size();
+    for (auto it = col.begin(); it != col.end(); ++it) {
+        auto const& entry = *it;
+        if (entry.isFree()) { continue; }
+        LVRef rowVar = entry.entryToLVRef(entry);
+        assert(!isQuasiBasic(rowVar));
         if(rowVar == nv || isQuasiBasic(rowVar)) {
             continue;
         }
         // update the polynomials
-        auto & poly = getRowPoly(rowVar);
-        const auto nvCoeff = poly.removeVar(nv);
-        poly.merge(nvPoly, nvCoeff,
+        auto & row = getRow(rowVar);
+        const auto indexCoeffPair = removeVarFromRow(nv, rowVar);
+        assert(indexCoeffPair.first == (it - col.begin()));
+        removeRowFromColumnAt(indexCoeffPair.first, bv);
+        // also columna information must be removed
+        row.merge(getRow(nv), indexCoeffPair.second,
                 // informAdded
                    [this, bv, rowVar](LVRef addedVar) {
-                       if (addedVar == bv) { return; }
+//                       if (addedVar == bv) { return -1; }
                        assert(cols[addedVar.x]);
                        assert(!contains(getColumn(addedVar), rowVar));
-                       addRowToColumn(rowVar, addedVar);
+                       return addRowToColumn(rowVar, addedVar);
                    },
                 // informRemoved
-                   [this, rowVar](LVRef removedVar) {
+                   [this, rowVar](LVRef removedVar, int index) {
                        assert(cols[removedVar.x]);
                        assert(contains(getColumn(removedVar), rowVar));
-                       removeRowFromColumn(rowVar, removedVar);
+                       removeRowFromColumnAt(index, removedVar);
                    }
                    , storage
         );
@@ -207,8 +296,9 @@ void Tableau::print() const {
     for(unsigned i = 0; i != cols.size(); ++i) {
         if(!cols[i]) { continue; }
         std::cout << "Var of the column: " << i << "; Contains: ";
-        for (auto var : getColumn(LVRef{i})) {
-            std::cout << var.x << ' ';
+        for (auto entry : getColumn(LVRef{i})) {
+            if (entry.isFree()) { continue; }
+            std::cout << Column::Entry::entryToLVRef(entry).x << ' ';
         }
         std::cout << '\n';
     }
@@ -222,7 +312,9 @@ bool Tableau::checkConsistency() const {
         if (isNonBasic(var)) {
             res &= (cols[i] != nullptr);
             assert(res);
-            for(auto row : *cols[i]) {
+            for(auto entry : *cols[i]) {
+                if (entry.isFree()) { continue; }
+                LVRef row = Column::Entry::entryToLVRef(entry);
                 res &= this->getRowPoly(row).contains(var);
                 assert(res);
             }
@@ -240,7 +332,8 @@ bool Tableau::checkConsistency() const {
         if (!rows[i]) { assert(isNonBasic(var)); continue; }
         res &= isBasic(var);
         assert(res);
-        for (auto const & term : *rows[i]) {
+        assert(getRowPoly(var).size() == getRow(var).getColumnIndices().size());
+        for (auto const & term : getRowPoly(var)) {
             auto termVar = term.var;
             res &= isNonBasic(termVar) && cols[termVar.x];
             assert(res);
@@ -254,9 +347,10 @@ bool Tableau::checkConsistency() const {
 // Makes sures the representing polynomial of this row contains only nonbasic variables
 void Tableau::normalizeRow(LVRef v) {
     assert(isQuasiBasic(v)); // Do not call this for non quasi rows
-    Polynomial & row = getRowPoly(v);
+    Row & row = getRow(v);
+    Polynomial & rowPoly = row.getPoly();
     std::vector<Polynomial::Term> toEliminate;
-    for (auto & term : row) {
+    for (auto & term : rowPoly) {
         if (isQuasiBasic(term.var)) {
             normalizeRow(term.var);
             toEliminate.push_back(term);
@@ -271,7 +365,7 @@ void Tableau::normalizeRow(LVRef v) {
             p.merge(getRowPoly(term.var), term.coeff, [](LVRef) {}, [](LVRef) {});
             p.addTerm(term.var, -term.coeff);
         }
-        row.merge(p, 1, [](LVRef) {}, [](LVRef) {});
+        rowPoly.merge(p, 1, [](LVRef) {}, [](LVRef) {});
     }
 }
 
@@ -279,8 +373,10 @@ void Tableau::normalizeRow(LVRef v) {
 void Tableau::quasiToBasic(LVRef v) {
     assert(isQuasiBasic(v));
     normalizeRow(v);
-    for (auto & term : getRowPoly(v)) {
-        addRowToColumn(v, term.var);
+    Row & row = getRow(v);
+    for (auto & term : row.getPoly()) {
+        LVRef var = term.var;
+        row.getColumnIndices().push_back(addRowToColumn(v, var));
     }
     varTypes[getVarId(v)] = VarType::BASIC;
     assert(isBasic(v));
@@ -288,15 +384,22 @@ void Tableau::quasiToBasic(LVRef v) {
 }
 
 void Tableau::basicToQuasi(LVRef v) {
+    assert(checkConsistency());
     assert(isBasic(v));
     varTypes[getVarId(v)] = VarType::QUASIBASIC;
     assert(isQuasiBasic(v));
 
-    Polynomial & row = getRowPoly(v);
-    for (auto & term : row) {
-        assert(isNonBasic(term.var));
-        removeRowFromColumn(v, term.var);
+    auto termIt = getRow(v).getPoly().begin();
+    auto end = getRow(v).getPoly().end();
+    auto indIt = getRow(v).getColumnIndices().begin();
+    while (termIt != end) {
+        LVRef var = termIt->var;
+        assert(isNonBasic(var));
+        removeRowFromColumnAt(*indIt, var);
+        ++termIt;
+        ++indIt;
     }
+    getRow(v).getColumnIndices().clear();
     assert(checkConsistency());
 }
 
@@ -311,4 +414,25 @@ void Tableau::ensureTableauReadyFor(LVRef v) {
     while(varTypes.size() <= id) {
         varTypes.push_back(VarType::NONE);
     }
+}
+
+uint32_t Column::getFreeSlotIndex() {
+    auto ret = free;
+    if (ret >= 0) {
+        Entry e = rows[free];
+        assert(e.isFree());
+        free = Entry::freeEntryToIndex(e);
+        assert(free < 0 || static_cast<std::size_t>(free) < rows.size());
+        return ret;
+    }
+    ret = rows.size();
+    rows.emplace_back();
+    return ret;
+}
+
+Column::Entry Column::Entry::indexToFreeEntry(int index) {
+    Entry ret;
+    ret.tag = Entry::Tag::Free;
+    ret.data = index;
+    return ret;
 }

@@ -230,9 +230,10 @@ LVRef LASolver::getLAVar_single(PTRef expr_in) {
     return x;
 }
 
-std::unique_ptr<Polynomial> LASolver::expressionToLVarPoly(PTRef term) {
+std::unique_ptr<Tableau::Row> LASolver::expressionToTableauRow(PTRef term) {
 
-    auto poly = std::unique_ptr<Polynomial>(new Polynomial());
+    using Row = Tableau::Row;
+    auto row = std::unique_ptr<Row>(new Row());
 
     bool negated = logic.isNegated(term);
 
@@ -247,10 +248,9 @@ std::unique_ptr<Polynomial> LASolver::expressionToLVarPoly(PTRef term) {
             coeff.negate();
         }
         simplex.nonbasicVar(var);
-        poly->addTerm(var, std::move(coeff));
+        row->getPoly().addTerm(var, std::move(coeff));
     }
-
-    return poly;
+    return row;
 }
 
 
@@ -287,7 +287,7 @@ LVRef LASolver::exprToLVar(PTRef expr) {
     else {
         // Cases (3), (4a) and (4b)
         x = getLAVar_single(expr);
-        simplex.newRow(x, expressionToLVarPoly(expr));
+        simplex.newRow(x, expressionToTableauRow(expr));
     }
     assert(x != LVRef_Undef);
     return x;

@@ -285,8 +285,12 @@ void Simplex::pivot(const LVRef bv, const LVRef nv){
     assert(tableau.isNonBasic(nv));
     assert(valueConsistent(bv));
 //    tableau.print();
+    assert(checkTableauConsistency());
     updateValues(bv, nv);
+    assert(valueConsistent(bv));
     tableau.pivot(bv, nv);
+//    tableau.print();
+    assert(checkTableauConsistency());
     // after pivot, bv is not longer a candidate
     eraseCandidate(bv);
     // and nv can be a candidate
@@ -307,7 +311,9 @@ void Simplex::changeValueBy(LVRef var, const Delta & diff) {
     // update var's value
     model->write(var, model->read(var) + diff);
     // update all (active) rows where var is present
-    for ( LVRef row : tableau.getColumn(var)){
+    for ( auto entry : tableau.getColumn(var)){
+        if (entry.isFree()) { continue; }
+        LVRef row = Column::Entry::entryToLVRef(entry);
         assert(!tableau.isNonBasic(row));
         if (tableau.isBasic(row)) { // skip quasi-basic variables
             model->write(row, model->read(row) + (tableau.getCoeff(row, var) * diff));
@@ -398,7 +404,7 @@ bool Simplex::valueConsistent(LVRef v) const
 {
     const Delta& value = model->read(v);
     Delta sum(0);
-    for (auto & term : tableau.getRowPoly(v)){
+    for (auto const & term : tableau.getRowPoly(v)){
       sum += term.coeff * model->read(term.var);
     }
 

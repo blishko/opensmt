@@ -32,7 +32,7 @@ public:
     const opensmt::Real & getCoeff(LVRef var) const;
     opensmt::Real removeVar(LVRef var);
     void negate();
-    void divideBy(const opensmt::Real& r);
+    void divideBy(opensmt::Real r);
 
     template<typename ADD, typename REM>
     void merge(const Polynomial & other, const opensmt::Real & coeff, ADD informAdded, REM informRemoved) {
@@ -60,6 +60,9 @@ public:
     const_iterator end() const{
         return poly.cend();
     }
+
+    Term & operator[](int index) { return poly[index]; }
+    Term const & operator[](int index) const { return poly[index]; }
 
     // debug
     bool contains(LVRef var) const {
