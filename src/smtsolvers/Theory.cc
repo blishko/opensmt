@@ -158,12 +158,44 @@ CoreSMTSolver::handleSat()
             }
             vec<Lit> reason;
             theory_handler.getReason(deds[i].l, reason);
+//            std::cout << "Reason for theory propagation:\n";
+//            std::cout << "Current decision level: " << decisionLevel() << "\n";
+//            for (auto l : reason) {
+////                std::cout << l.x << ' ' << this->theory_handler.getLogic().printTerm(theory_handler.varToTerm(var(l))) << '\n';
+//                std::cout << l.x << ' ';
+//            }
+//            std::cout << std::endl;
+
+//            int max_i = 1;
+//            // Find the first literal assigned at the next-highest level:
+//            for (int i = 2; i < reason.size(); i++)
+//                if (level(var(reason[i])) > level(var(reason[max_i])))
+//                    max_i = i;
+//            // Swap-in this literal at index 1:
+//            Lit p         = reason[max_i];
+//            reason[max_i] = reason[1];
+//            reason[1]     = p;
+//            int btlevel   = level(var(p));
             CRef ctr = ca.alloc(reason, true);
+//            if (ctr == 1227) {
+//                for (Lit lit : reason) {
+//                    std::cout << lit.x << " has value " << toInt(value(lit)) << '\n';
+//                }
+//                std::cout << std::endl;
+//            }
             learnts.push(ctr);
             attachClause(ctr);
             undo_stack.push(undo_stack_el(undo_stack_el::NEWLEARNT, ctr));
             claBumpActivity(ca[ctr]);
             learnt_t_lemmata ++;
+//            if (btlevel != decisionLevel()) {
+//                cancelUntil(btlevel);
+//                uncheckedEnqueue(deds[i].l, ctr);
+//                return TPropRes::Propagate;
+//            }
+//            else {
+//                uncheckedEnqueue(deds[i].l, ctr);
+//            }
             uncheckedEnqueue(deds[i].l, ctr);
         }
         if (deds.size() > 0) {
