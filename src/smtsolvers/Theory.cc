@@ -156,7 +156,15 @@ CoreSMTSolver::handleSat()
             if (deds[i].lev != decisionLevel()) {
                 // Maybe do something someday?
             }
-            uncheckedEnqueue(deds[i].l, CRef_Fake);
+            vec<Lit> reason;
+            theory_handler.getReason(deds[i].l, reason);
+            CRef ctr = ca.alloc(reason, true);
+            learnts.push(ctr);
+            attachClause(ctr);
+            undo_stack.push(undo_stack_el(undo_stack_el::NEWLEARNT, ctr));
+            claBumpActivity(ca[ctr]);
+            learnt_t_lemmata ++;
+            uncheckedEnqueue(deds[i].l, ctr);
         }
         if (deds.size() > 0) {
             return TPropRes::Propagate;

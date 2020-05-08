@@ -484,7 +484,6 @@ protected:
     uint32_t n_clauses;             // number of clauses in the problem
     vec<CRef>           clauses;          // List of problem clauses.
     vec<CRef>           learnts;          // List of learnt clauses.
-    vec<CRef>           tmp_reas;         // Reasons for minimize_conflicts 2
 #ifdef PEDANTIC_DEBUG
     vec<Clause*>        debug_reasons;    // Reasons for the theory deduced clauses
     Map<Var,int,VarHash> debug_reason_map; // Maps the deduced lit to the clause used to deduce it
@@ -992,7 +991,7 @@ inline bool     CoreSMTSolver::addOriginalClause(Lit p, Lit q, Lit r)
 
 inline bool     CoreSMTSolver::locked          (const Clause& c) const
 {
-    return value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && reason(var(c[0])) != CRef_Fake && ca.lea(reason(var(c[0]))) == &c;
+    return value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c;
 }
 #ifndef PEDANTIC_DEBUG
 inline void     CoreSMTSolver::newDecisionLevel()

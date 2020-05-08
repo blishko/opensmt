@@ -214,8 +214,6 @@ CoreSMTSolver::~CoreSMTSolver()
     for (int i = 0; i < clauses.size(); i++) ca.free(clauses[i]);
 #endif
 
-    for (int i = 0; i < tmp_reas.size(); i++) ca.free(tmp_reas[i]);
-
 #ifdef STATISTICS
     if ( config.produceStats() != 0 ) printStatistics ( config.getStatsOut( ) );
     // TODO added for convenience
@@ -953,80 +951,6 @@ void CoreSMTSolver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         assert(index >= 0);
         p     = trail[index+1];
 
-        if ( reason(var(p)) == CRef_Fake )
-        {
-            // Before retrieving the reason it is necessary to backtrack
-            // a little bit in order to remove every atom pushed after
-            // p has been deduced
-            Var v = var(p);
-            assert(value(p) == l_True);
-            // Backtracking the trail until v is the variable on the top
-            cancelUntilVar( v );
-
-            vec<Lit> r;
-            // Retrieving the reason
-#ifdef STATISTICS
-            const double start = cpuTime( );
-#endif
-#ifdef DEBUG_REASONS
-            if (theory_handler.getReason( p, r, assigns ) == false)
-            {
-                assert(debug_reason_map.has(var(p)));
-                int idx = debug_reason_map[var(p)];
-                CRef cr = debug_reasons[idx];
-                cerr << "Could not find reason " << theory_handler.printAsrtClause(c) << endl;
-                assert(false);
-            }
-#else
-            theory_handler.getReason(p, r);
-#endif
-            assert(r.size() > 0);
-#ifdef STATISTICS
-            tsolvers_time += cpuTime( ) - start;
-#endif
-
-            CRef ctr = CRef_Undef;
-            if ( r.size() > config.sat_learn_up_to_size )
-            {
-                ctr = ca.alloc(r);
-                cleanup.push(ctr);
-            }
-            else
-            {
-                bool learnt_ = config.sat_temporary_learn;
-                ctr = ca.alloc(r, learnt_);
-                learnts.push(ctr);
-                attachClause(ctr);
-                undo_stack.push(undo_stack_el(undo_stack_el::NEWLEARNT, ctr));
-                claBumpActivity(ca[ctr]);
-                learnt_t_lemmata ++;
-                if ( !config.sat_temporary_learn )
-                    perm_learnt_t_lemmata ++;
-            }
-            assert( ctr != CRef_Undef );
-            vardata[var(p)].reason = ctr;
-#ifdef PRODUCE_PROOF
-            proof.addRoot(ctr, clause_type::CLA_THEORY);
-            /*if ( config.isIncremental() )
-            {
-                undo_stack_oper.push_back( NEWPROOF );
-                undo_stack_elem.push_back( (void *)ct );
-            }*/
-
-            if ( config.produce_inter() > 0 )
-            {
-                // Enode * interpolants = theory_handler->getInterpolants( );
-                // assert( interpolants );
-                // clause_to_in[ ct ] = interpolants;
-                /*if ( config.isIncremental() )
-                {
-                    undo_stack_oper.push_back( NEWINTER );
-                    undo_stack_elem.push_back( NULL );
-                }*/
-            }
-#endif
-        }
-
         confl = reason(var(p));
 
         // RB: If this assertion fails, most of the times
@@ -1200,86 +1124,6 @@ bool CoreSMTSolver::litRedundant(Lit p, uint32_t abstract_levels)
     {
         assert(reason(var(analyze_stack.last())) != CRef_Undef);
         CRef cr = reason(var(analyze_stack.last()));
-        if ((config.sat_minimize_conflicts >= 2) && (cr == CRef_Fake))
-        {
-            // Before retrieving the reason it is necessary to backtrack
-            // a little bit in order to remove every atom pushed after
-            // p has been deduced
-            Lit p = analyze_stack.last();
-            Var v = var(p);
-            vec< Lit > r;
-            // Temporairly backtracking
-            cancelUntilVarTempInit( v );
-            // Retrieving the reason
-#ifdef DEBUG_REASONS
-            if (theory_handler.getReason( p, r, assigns ) == false)
-            {
-                assert(debug_reason_map.has(var(p)));
-                int idx = debug_reason_map[var(p)];
-                Clause* c = debug_reasons[idx];
-                cerr << theory_handler.printAsrtClause(c) << endl;
-                assert(false);
-            }
-#else
-            theory_handler.getReason(p, r);
-#endif
-            // Restoring trail
-            cancelUntilVarTempDone( );
-            CRef ct = CRef_Undef;
-            if ( r.size( ) > config.sat_learn_up_to_size )
-            {
-                ct = ca.alloc(r);
-                tmp_reas.push(ct);
-            }
-            else
-            {
-                ct = ca.alloc(r, config.sat_temporary_learn);
-                learnts.push(ct);
-                if (config.isIncremental() != 0)
-                    undo_stack.push(undo_stack_el(undo_stack_el::NEWLEARNT, ct));
-                attachClause(ct);
-                claBumpActivity(ca[ct]);
-                learnt_t_lemmata ++;
-                if ( !config.sat_temporary_learn )
-                    perm_learnt_t_lemmata ++;
-            }
-            vardata[v].reason = ct;
-#ifdef PRODUCE_PROOF
-            /* NOTE : THEORY INTERPOLATION NOT YET SUPPORTED
-            proof.addRoot( ct, CLA_THEORY );
-            if ( config.isIncremental() )
-            {
-                undo_stack_oper.push_back( NEWPROOF );
-                undo_stack_elem.push_back( (void *)ct );
-            }
-            if ( config.produce_inter() > 0 )
-            {
-                Enode * interpolants = theory_handler->getInterpolants( );
-                assert( interpolants );
-                clause_to_in[ ct ] = interpolants;
-                if ( config.isIncremental() )
-                {
-                    undo_stack_oper.push_back( NEWINTER );
-                    undo_stack_elem.push_back( NULL );
-                }
-            }
-            */
-#endif
-        }
-        else
-        {
-            assert(config.sat_minimize_conflicts == 1);
-            // Just give up when fake reason is found -- but clean analyze_toclear
-            if (cr == CRef_Fake)
-            {
-                for (int j = top; j < analyze_toclear.size(); j++)
-                seen[var(analyze_toclear[j])] = 0;
-                analyze_toclear.shrink(analyze_toclear.size() - top);
-
-                return false;
-            }
-        }
-
         Clause& c = ca[cr];
 
         analyze_stack.pop();
@@ -1348,24 +1192,10 @@ void CoreSMTSolver::analyzeFinal(Lit p, vec<Lit>& out_conflict)
             }
             else
             {
-                if (reason(x) == CRef_Fake)
-                {
-                    cancelUntilVarTempInit(x);
-                    vec<Lit> r;
-                    theory_handler.getReason(trail[i], r);
-                    assert(r.size() > 0);
-                    for (int j = 1; j < r.size(); j++)
-                        if (level(var(r[j])) > 0)
-                            seen[var(r[j])] = 1;
-                    cancelUntilVarTempDone();
-                }
-                else
-                {
                     Clause& c = ca[reason(x)];
                     for (unsigned j = 1; j < c.size(); j++)
                         if (level(var(c[j])) > 0)
                             seen[var(c[j])] = 1;
-                }
             }
             seen[x] = 0;
         }
@@ -1377,7 +1207,6 @@ void CoreSMTSolver::analyzeFinal(Lit p, vec<Lit>& out_conflict)
 
 void CoreSMTSolver::uncheckedEnqueue(Lit p, CRef from)
 {
-    assert(from != CRef_Fake || theory_handler.getLogic().isTheoryTerm(theory_handler.varToTerm(var(p))));
 #ifdef DEBUG_REASONS
     assert(from == CRef_Fake || !debug_reason_map.has(var(p)));
 #endif
@@ -2384,7 +2213,7 @@ void CoreSMTSolver::relocAll(ClauseAllocator& to)
     {
         Var v = var(trail[i]);
 
-        if (reason(v) != CRef_Undef && reason(v) != CRef_Fake && (ca[reason(v)].reloced() || locked(ca[reason(v)])))
+        if (reason(v) != CRef_Undef && (ca[reason(v)].reloced() || locked(ca[reason(v)])))
             ca.reloc(vardata[v].reason, to);
     }
 
