@@ -109,105 +109,232 @@ PTRef LALogic::normalizeMul(PTRef mul)
     else
         return v;
 }
+
+namespace {
+class LATerm {
+
+    struct LAFactor {
+        PTRef var;
+        opensmt::Real coeff;
+
+        LAFactor(PTRef var, opensmt::Real coeff) : var{var}, coeff{std::move(coeff)} {}
+
+        LAFactor(opensmt::Real coeff, PTRef var) : var{var}, coeff{std::move(coeff)} {}
+    };
+
+    opensmt::Real constantFactor;
+    std::vector<LAFactor> variableFactors;
+
+public:
+
+    using Factor = LAFactor;
+    using iterator = typename std::vector<Factor>::iterator;
+    using const_iterator = typename std::vector<Factor>::const_iterator;
+
+    LATerm(opensmt::Real constantFactor, std::vector<Factor> variableFactors)
+            : constantFactor{std::move(constantFactor)}, variableFactors{std::move(variableFactors)} {}
+
+    LATerm(std::vector<Factor> variableFactors, opensmt::Real constantFactor)
+            : constantFactor{std::move(constantFactor)}, variableFactors{std::move(variableFactors)} {}
+
+    std::size_t getNumberOfVars() const { return variableFactors.size(); }
+
+    opensmt::Real getConstantFactor() const { return constantFactor; }
+
+    const_iterator getFactorIterator() const { return variableFactors.cbegin(); }
+
+    const_iterator getFactorIteratorEnd() const { return variableFactors.cend(); }
+
+    PTRef getLeadingVariable() const { assert(getNumberOfVars() != 0); return getFactorIterator()->var; }
+
+    std::pair<PTRef, PTRef> toSubstitution(LALogic& logic) {
+        PTRef var = getLeadingVariable();
+        auto coeff = -variableFactors.begin()->coeff; // MB: negated, to move the factors to other side of equality
+        vec<PTRef> sumArgs;
+        for (auto it = variableFactors.begin() + 1; it != variableFactors.end(); ++ it) {
+            sumArgs.push(logic.mkNumTimes(it->var, logic.mkConst(it->coeff / coeff)));
+        }
+        sumArgs.push(logic.mkConst(constantFactor / coeff));
+        return std::make_pair(var, logic.mkNumPlus(sumArgs));
+    };
+
+    void substituteLeadingVar(PTRef sub, LALogic& logic);
+};
+
+using Term = LATerm;
+
+Term* equalityToTerm(PTRef equality, LALogic & logic) {
+    assert(logic.isNumEq(equality));
+    PTRef lhs = logic.getPterm(equality)[0];
+    PTRef rhs = logic.getPterm(equality)[1];
+    std::vector<Term::Factor> factors;
+    FastRational constantFactor = 0;
+    std::vector<PTRef> toProcess;
+    PTRef ptterm = logic.mkNumMinus(lhs, rhs);
+    Pterm const & t = logic.getPterm(ptterm);
+    if (logic.isNumPlus(ptterm)) {
+        for (int i = 0; i < t.size(); ++i) {
+            toProcess.push_back(t[i]);
+        }
+    } else {
+        toProcess.push_back(ptterm);
+    }
+    factors.reserve(toProcess.size());
+    for (int i = 0; i < toProcess.size(); ++i) {
+        PTRef ptfactor = toProcess[i];
+        PTRef var;
+        PTRef constant;
+        logic.splitTermToVarAndConst(ptfactor, var, constant);
+        if (var == PTRef_Undef) {
+            // constant factor
+            constantFactor = logic.getNumConst(constant);
+        } else {
+            // coeff * var
+            factors.emplace_back(var, logic.getNumConst(constant));
+        }
+    }
+    return new Term(std::move(factors), std::move(constantFactor));
+}
+
+void print(std::ostream& out, LALogic& logic, Term const& term) {
+    for (auto it = term.getFactorIterator(); it != term.getFactorIteratorEnd(); ++it) {
+        out << "( " << logic.printTerm(it->var) << " * " << it->coeff << ") + ";
+    }
+    out << term.getConstantFactor() << std::endl;
+}
+
+void LATerm::substituteLeadingVar(PTRef sub, LALogic& logic) {
+    auto coeff = this->variableFactors.begin()->coeff;
+    variableFactors.erase(variableFactors.begin());
+    const Pterm& pterm = logic.getPterm(sub);
+    for (int i = 0; i < pterm.size(); ++i) {
+        PTRef elem = pterm[i];
+        if (logic.isConstant(elem)) {
+            this->constantFactor += logic.getNumConst(elem) * coeff;
+        }
+        else if (logic.isNumTimes(elem)) {
+            PTRef var;
+            PTRef constant;
+            logic.splitTermToVarAndConst(elem, var, constant);
+            assert (var != PTRef_Undef);
+            // insert this to the right place
+            auto it = std::lower_bound(variableFactors.begin(), variableFactors.end(), var,
+                    [](LAFactor const & factor, PTRef var){ return factor.var.x < var.x; });
+            if (it->var == var) {
+                it->coeff += logic.getNumConst(constant) * coeff;
+                if (it->coeff.isZero()) { variableFactors.erase(it); }
+            }
+            else {
+                variableFactors.insert(it, LAFactor(var, logic.getNumConst(constant) * coeff));
+            }
+        }
+        else { assert(false); }
+    }
+}
+
+}
+
 lbool LALogic::arithmeticElimination(const vec<PTRef> & top_level_arith, Map<PTRef, PtAsgn, PTRefHash> & substitutions)
 {
-    vec<LAExpression*> equalities;
+    if (top_level_arith.size() == 0) { return l_Undef; }
+    vec<Term*> equalities;
     LALogic& logic = *this;
     // I don't know if reversing the order makes any sense but osmt1
     // does that.
-    for (int i = top_level_arith.size()-1; i >= 0; i--) {
-        equalities.push(new LAExpression(logic, top_level_arith[i]));
+    for (PTRef eq : top_level_arith) {
+        equalities.push(equalityToTerm(eq, logic));
     }
-#ifdef SIMPLIFY_DEBUG
-    for (int i = 0; i < equalities.size(); i++) {
-        cerr << "; ";
-        equalities[i]->print(cerr);
-        cerr << endl;
+
+    auto termCompare = [](Term * first, Term * second) {
+        auto varsInFirst = first->getNumberOfVars();
+        auto varsInSecond = second->getNumberOfVars();
+        if (varsInFirst == 0) { return true; }
+        if (varsInSecond == 0) { return false; }
+        PTRef pf = first->getLeadingVariable();
+        PTRef ps = second->getLeadingVariable();
+        return pf.x < ps.x
+               || (pf.x == ps.x &&  varsInFirst < varsInSecond);
+    };
+    std::cout << "Start of sort of " << equalities.size() << "equalities\n";
+    const double initTime = cpuTime();
+    std::sort(equalities.begin(), equalities.end(), termCompare);
+    const double endTime = cpuTime();
+    std::cout << endTime - initTime << std::endl;
+//    for (auto* eq : equalities) {
+//        print(std::cout, logic, *eq);
+//    }
+//    std::cout << std::endl;
+    auto eqForSubIt = equalities.begin();
+    auto res = l_Undef;
+    while (eqForSubIt != equalities.end()) {
+        // Get substitution from current inequality
+        Term* current = *eqForSubIt;
+        std::pair<PTRef, PTRef> varSubPair = current->toSubstitution(logic);
+        PTRef var = varSubPair.first;
+        PTRef sub = varSubPair.second;
+        if (var == PTRef_Undef) {
+            assert(sub == logic.getTerm_true() || sub == logic.getTerm_false());
+            if (sub == logic.getTerm_false()) {
+                res = l_False;
+                break;
+            }
+            if (sub == logic.getTerm_true()) {
+                ++eqForSubIt;
+                continue;
+            }
+        }
+        // Here we know that there is a substitution
+        assert(logic.isVar(var));
+        // remember the substitution
+        if (!substitutions.has(var)) {
+            substitutions.insert(var, PtAsgn(sub, l_True));
+        } else {
+            // MB: we should not have two substitutions for the same variable
+            assert(false);
+        }
+        // Substitute in all following inequalities
+        // We maintain the invariant that 1) Variables in equalities are sorted by PTRef
+        // 2) Equalities are sorted according to the PTRef of its first variable
+        // With current var, we just need to check the following equalities while its still the first variable
+        auto toSubIt = eqForSubIt + 1;
+        while (toSubIt != equalities.end() && (*toSubIt)->getLeadingVariable() == var) {
+            Term* toSub = *toSubIt;
+            toSub->substituteLeadingVar(sub, logic);
+            ++toSubIt;
+        }
+        // After substitution, we need to restore the invariant of sortedness
+        while (--toSubIt != eqForSubIt) {
+            auto currentPos = toSubIt;
+            auto nextPos = toSubIt + 1;
+            // buble the current equality to the right place
+            while (nextPos != equalities.end() && termCompare(*nextPos, *currentPos)) {
+                std::iter_swap(currentPos, nextPos);
+                currentPos = nextPos;
+                ++nextPos;
+            }
+        }
+        // Now everything
+
     }
-#endif
-    //
-    // If just one equality, produce substitution right away
-    //
-    if ( equalities.size( ) == 0 )
-        ; // Do nothing
-    else if ( equalities.size( ) == 1 ) {
-        LAExpression & lae = *equalities[ 0 ];
-        if (lae.solve() == PTRef_Undef) {
-            // Constant substituted by a constant.  No new info from
-            // here.
-//            printf("there is something wrong here\n");
-            return l_Undef;
-        }
-        pair<PTRef, PTRef> sub = lae.getSubst();
-        assert( sub.first != PTRef_Undef );
-        assert( sub.second != PTRef_Undef );
-        if(substitutions.has(sub.first))
-        {
-            //cout << "ARITHMETIC ELIMINATION FOUND DOUBLE SUBSTITUTION:\n" << printTerm(sub.first) << " <- " << printTerm(sub.second) << " | " << printTerm(substitutions[sub.first].tr) << endl;
-            if(sub.second != substitutions[sub.first].tr)
-                return l_False;
-        } else
-            substitutions.insert(sub.first, PtAsgn(sub.second, l_True));
-    } else {
-        // Otherwise obtain substitutions
-        // by means of Gaussian Elimination
-        //
-        // FORWARD substitution
-        // We put the matrix equalities into upper triangular form
-        //
-        for (int i = 0; i < equalities.size()-1; i++) {
-            LAExpression &s = *equalities[i];
-            // Solve w.r.t. first variable
-            if (s.solve( ) == PTRef_Undef) {
-                if (logic.isTrue(s.toPTRef())) continue;
-                assert(logic.isFalse(s.toPTRef()));
-                return l_False;
-            }
-            // Use the first variable x in s to generate a
-            // substitution and replace x in lac
-            for ( int j = i + 1 ; j < equalities.size( ) ; j ++ ) {
-                LAExpression & lac = *equalities[ j ];
-                combine( s, lac );
-            }
-        }
-        //
-        // BACKWARD substitution
-        // From the last equality to the first we put
-        // the matrix equalities into canonical form
-        //
-        for (int i = equalities.size() - 1; i >= 1; i--) {
-            LAExpression & s = *equalities[i];
-            // Solve w.r.t. first variable
-            if (s.solve() == PTRef_Undef) {
-                if (logic.isTrue(s.toPTRef())) continue;
-                assert(logic.isFalse(s.toPTRef()));
-                return l_False;
-            }
-            // Use the first variable x in s as a
-            // substitution and replace x in lac
-            for (int j = i - 1; j >= 0; j--) {
-                LAExpression& lac = *equalities[j];
-                combine(s, lac);
-            }
-        }
+
         //
         // Now, for each row we get a substitution
         //
-        for (int i = 0 ;i < equalities.size(); i++) {
-            LAExpression& lae = *equalities[i];
-            pair<PTRef, PTRef> sub = lae.getSubst();
-            if (sub.first == PTRef_Undef) continue;
-            assert(sub.second != PTRef_Undef);
-            //cout << printTerm(sub.first) << " <- " << printTerm(sub.second) << endl;
-            if(!substitutions.has(sub.first)) {
-                substitutions.insert(sub.first, PtAsgn(sub.second, l_True));
-//                cerr << "; gaussian substitution: " << logic.printTerm(sub.first) << " -> " << logic.printTerm(sub.second) << endl;
-            } else {
-                if (isConstant(sub.second) && isConstant(sub.first) && (sub.second != substitutions[sub.first].tr))
-                    return l_False;
-            }
-        }
-    }
+//        for (int i = 0 ;i < equalities.size(); i++) {
+//            LAExpression& lae = *equalities[i];
+//            pair<PTRef, PTRef> sub = lae.getSubst();
+//            if (sub.first == PTRef_Undef) continue;
+//            assert(sub.second != PTRef_Undef);
+//            //cout << printTerm(sub.first) << " <- " << printTerm(sub.second) << endl;
+//            if(!substitutions.has(sub.first)) {
+//                substitutions.insert(sub.first, PtAsgn(sub.second, l_True));
+////                cerr << "; gaussian substitution: " << logic.printTerm(sub.first) << " -> " << logic.printTerm(sub.second) << endl;
+//            } else {
+//                if (isConstant(sub.second) && isConstant(sub.first) && (sub.second != substitutions[sub.first].tr))
+//                    return l_False;
+//            }
+//        }
+
     // Clean constraints
     for (int i = 0; i < equalities.size(); i++)
         delete equalities[i];
