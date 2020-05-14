@@ -212,7 +212,7 @@ void LATerm::substituteLeadingVar(PTRef sub, LALogic& logic) {
         if (logic.isConstant(elem)) {
             this->constantFactor += logic.getNumConst(elem) * coeff;
         }
-        else if (logic.isNumTimes(elem)) {
+        else if (logic.isNumTimes(elem) || logic.isNumVar(elem)) {
             PTRef var;
             PTRef constant;
             logic.splitTermToVarAndConst(elem, var, constant);
@@ -220,7 +220,7 @@ void LATerm::substituteLeadingVar(PTRef sub, LALogic& logic) {
             // insert this to the right place
             auto it = std::lower_bound(variableFactors.begin(), variableFactors.end(), var,
                     [](LAFactor const & factor, PTRef var){ return factor.var.x < var.x; });
-            if (it->var == var) {
+            if (it != variableFactors.end() && it->var == var) {
                 it->coeff += logic.getNumConst(constant) * coeff;
                 if (it->coeff.isZero()) { variableFactors.erase(it); }
             }
@@ -255,11 +255,11 @@ lbool LALogic::arithmeticElimination(const vec<PTRef> & top_level_arith, Map<PTR
         return pf.x < ps.x
                || (pf.x == ps.x &&  varsInFirst < varsInSecond);
     };
-    std::cout << "Start of sort of " << equalities.size() << "equalities\n";
-    const double initTime = cpuTime();
+//    std::cout << "Start of sort of " << equalities.size() << " equalities\n";
+//    const double initTime = cpuTime();
     std::sort(equalities.begin(), equalities.end(), termCompare);
-    const double endTime = cpuTime();
-    std::cout << endTime - initTime << std::endl;
+//    const double endTime = cpuTime();
+//    std::cout << endTime - initTime << std::endl;
 //    for (auto* eq : equalities) {
 //        print(std::cout, logic, *eq);
 //    }
@@ -269,6 +269,7 @@ lbool LALogic::arithmeticElimination(const vec<PTRef> & top_level_arith, Map<PTR
     while (eqForSubIt != equalities.end()) {
         // Get substitution from current inequality
         Term* current = *eqForSubIt;
+//        print(std::cout, logic, *current);
         std::pair<PTRef, PTRef> varSubPair = current->toSubstitution(logic);
         PTRef var = varSubPair.first;
         PTRef sub = varSubPair.second;
@@ -313,7 +314,8 @@ lbool LALogic::arithmeticElimination(const vec<PTRef> & top_level_arith, Map<PTR
                 ++nextPos;
             }
         }
-        // Now everything
+        // Now everything is sorted again, move to process the next inequality
+        ++eqForSubIt;
 
     }
 
