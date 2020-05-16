@@ -1769,7 +1769,7 @@ void Logic::getNewFacts(PTRef root, vec<Map<PTRef,lbool,PTRefHash>*>& prev_units
     for (auto fact : isProcessed[pa]) {
         lbool prev_val = isInHashes(prev_units, facts, fact);
         if (prev_val != l_Undef && prev_val != fact.sgn) {
-            assert(false); // MB: Examine! I believe this should not happen, or we should do something else;
+            // This will happen if two opposite facts are obtained through the recursive traversal
             return; // conflict
         }
         else if (prev_val == fact.sgn) {

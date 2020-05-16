@@ -148,6 +148,9 @@ public:
     PTRef getLeadingVariable() const { assert(getNumberOfVars() != 0); return getFactorIterator()->var; }
 
     std::pair<PTRef, PTRef> toSubstitution(LALogic& logic) {
+        if (getNumberOfVars() == 0) {
+            return std::make_pair(PTRef_Undef, constantFactor.isZero() ? logic.getTerm_true() : logic.getTerm_false());
+        }
         PTRef var = getLeadingVariable();
         auto coeff = -variableFactors.begin()->coeff; // MB: negated, to move the factors to other side of equality
         vec<PTRef> sumArgs;
@@ -206,9 +209,19 @@ void print(std::ostream& out, LALogic& logic, Term const& term) {
 void LATerm::substituteLeadingVar(PTRef sub, LALogic& logic) {
     auto coeff = this->variableFactors.begin()->coeff;
     variableFactors.erase(variableFactors.begin());
-    const Pterm& pterm = logic.getPterm(sub);
-    for (int i = 0; i < pterm.size(); ++i) {
-        PTRef elem = pterm[i];
+    vec<PTRef> toProcess;
+    if (logic.isConstant(sub) || logic.isNumVar(sub) || logic.isNumTimes(sub)) {
+        toProcess.push(sub);
+    }
+    else {
+        assert(logic.isNumPlus(sub));
+        const Pterm& pterm = logic.getPterm(sub);
+        for (int i = 0; i < pterm.size(); ++i) {
+            toProcess.push(pterm[i]);
+        }
+    }
+    for (int i = 0; i < toProcess.size(); ++i) {
+        PTRef elem = toProcess[i];
         if (logic.isConstant(elem)) {
             this->constantFactor += logic.getNumConst(elem) * coeff;
         }
