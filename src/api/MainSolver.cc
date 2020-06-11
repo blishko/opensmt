@@ -161,8 +161,6 @@ sstat MainSolver::simplifyFormulas(char** err_msg)
             if (logic.isBooleanOperator(root)) {
                 root = rewriteMaxArity(root);
             }
-            // root_instance is updated to the and of the simplified formulas currently in the solver, together with the substitutions
-            root = logic.mkAnd(root, frame.substs);
             root_instance.setRoot(root);
             // Stop if problem becomes unsatisfiable
             if ((status = giveToSolver(root, frame.getId())) == s_False)
