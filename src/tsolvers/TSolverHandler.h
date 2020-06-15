@@ -36,6 +36,7 @@ class TheoryInterpolator;
 
 class THandler;
 class TSolver;
+class ModelBuilder;
 
 class TSolverHandler
 {
@@ -70,7 +71,11 @@ public:
     virtual PTRef getInterpolant(const ipartitions_t& mask, map<PTRef, icolor_t>*) = 0;
 
     void    setSubstitutions(Map<PTRef,PtAsgn,PTRefHash>& substs_) { substs_.moveTo(substs); }
+
+    // DEPRECATED
     ValPair getValue          (PTRef tr) const;
+
+    void    fillTheoryVars    (ModelBuilder& modelBuilder) const;
     void    computeModel      ();                      // Computes a model in the solver if necessary
     bool    assertLit         (PtAsgn);                // Push the assignment to all theory solvers
     void    declareAtoms      (PTRef);                 // Declare atoms to theory solvers
