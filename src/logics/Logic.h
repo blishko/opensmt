@@ -36,6 +36,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 class SStore;
+class Model;
 struct SMTConfig;
 
 
@@ -489,6 +490,13 @@ class Logic {
     void collectStats(PTRef, int& n_of_conn, int& n_of_eq, int& n_of_uf, int& n_of_if);
 
     inline int     verbose                       ( ) const;// { return config.verbosity(); }
+
+    // Generalization related stuff
+public:
+    PTRef generalize(PTRef fla, vec<PTRef> variablesToEliminate, Model & model);
+private:
+    std::vector<PTRef> getImplicant(PTRef fla, Model & model);
+
 };
 
 #endif // LOGIC_H
