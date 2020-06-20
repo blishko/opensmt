@@ -11,27 +11,31 @@
 #ifndef OPENSMT_MODEL_H
 #define OPENSMT_MODEL_H
 
-
 class Model {
-
 public:
     using Evaluation = std::unordered_map<PTRef, PTRef, PTRefHash>;
 
-
-    Model(Logic& logic, Evaluation basicEval) : varEval(std::move(basicEval)), logic(logic) {
+    Model(Logic& logic, Evaluation basicEval)
+        : varEval(std::move(basicEval)), logic(logic) {
         assert(std::all_of(varEval.begin(), varEval.end(),
-                [&logic](Evaluation::value_type entry) { return logic.isVar(entry.first) && logic.isConstant(entry.second); }
-                ));
+                           [&logic](Evaluation::value_type entry) { return logic.isVar(entry.first) && logic.isConstant(entry.second); }
+        ));
     }
 
     PTRef evaluate(PTRef term);
 
-private:
+    virtual ~Model() = default;
+
+protected:
     const Evaluation varEval;
 
     Evaluation extendedEval;
 
     Logic & logic;
+
+    virtual PTRef handleUnknownVar(PTRef) = 0;
+
+    virtual PTRef handleComplexTerm(SymRef symbol, vec<PTRef>& args) = 0;
 
     // helper methods
     inline bool hasVarVal(PTRef term) {
@@ -57,10 +61,28 @@ private:
         auto res = extendedEval.insert(std::make_pair(term, val));
         assert(res.second); (void)res;
     }
-
-
-
 };
+
+class ModelWithDefaults : public Model {
+public:
+    ModelWithDefaults(Logic& logic, Evaluation basicEval)
+    : Model(logic, std::move(basicEval)) {}
+
+private:
+    PTRef handleUnknownVar(PTRef pt) override;
+    PTRef handleComplexTerm(SymRef symbol, vec<PTRef> & args) override;
+};
+
+class ExplicitModel : public Model {
+public:
+    ExplicitModel(Logic& logic, Evaluation basicEval)
+            : Model(logic, std::move(basicEval)) {}
+
+private:
+    PTRef handleUnknownVar(PTRef pt) override { return PTRef_Undef; }
+    PTRef handleComplexTerm(SymRef symbol, vec<PTRef> & args) override;
+};
+
 
 
 #endif //OPENSMT_MODEL_H

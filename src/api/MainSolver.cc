@@ -269,7 +269,7 @@ std::unique_ptr<Model> MainSolver::getModel() {
     thandler.fillTheoryVars(modelBuilder);
     thandler.addSubstitutions(modelBuilder);
 
-    return modelBuilder.build();
+    return modelBuilder.buildModelWithDefaults();
 }
 
 void MainSolver::addToConj(vec<vec<PtAsgn> >& in, vec<PTRef>& out)

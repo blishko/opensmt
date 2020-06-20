@@ -4,13 +4,26 @@
 
 #include "ModelBuilder.h"
 
-void ModelBuilder::processSubstitutions(Map<PTRef,PtAsgn,PTRefHash> const & subst) {
-    Map<PTRef,PtAsgn,PTRefHash> copy;
-    subst.copyTo(copy);
-    logic.substitutionsTransitiveClosure(copy);
+void ModelBuilder::addSubstitutions(Map<PTRef,PtAsgn,PTRefHash> const & subst) {
+    auto entries = subst.getKeysAndValsPtrs();
+    for (auto const * const entry : entries) {
+        assert(logic.isVar(entry->key));
+        if (entry->data.sgn == l_True) {
+            if (substitutions.has(entry->key)) {
+                substitutions[entry->key] = entry->data;
+            }
+            else {
+                substitutions.insert(entry->key, entry->data);
+            }
+        }
+    }
+}
+template<typename TGetModel>
+void ModelBuilder::processSubstitutions(TGetModel getModel) {
+    logic.substitutionsTransitiveClosure(substitutions);
     auto assignCopy = this->assignment;
-    auto model = this->build();
-    auto entries = copy.getKeysAndValsPtrs();
+    auto model = getModel();
+    auto entries = substitutions.getKeysAndValsPtrs();
     for (auto const * const entry : entries) {
         assert(logic.isVar(entry->key));
         if (entry->data.sgn == l_True) {
@@ -21,4 +34,12 @@ void ModelBuilder::processSubstitutions(Map<PTRef,PtAsgn,PTRefHash> const & subs
         }
     }
     this->assignment = std::move(assignCopy);
+}
+
+void ModelBuilder::processSubstitutionsWithDefault() {
+    processSubstitutions([this] { return this->buildModelWithDefaults_(); });
+}
+
+void ModelBuilder::processSubstitutionsExact() {
+    processSubstitutions([this] { return this->buildPreciseModel_(); });
 }

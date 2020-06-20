@@ -36,7 +36,7 @@ protected:
                 std::make_pair(a, logic.getTerm_true()),
                 std::make_pair(b, logic.getTerm_false())
         };
-        return std::unique_ptr<Model>(new Model(logic, eval));
+        return std::unique_ptr<Model>(new ModelWithDefaults(logic, eval));
     }
 
 };
