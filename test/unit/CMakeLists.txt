@@ -113,6 +113,7 @@ gtest_add_tests(TARGET BoundTest)
 add_executable(ModelTest)
 target_sources(ModelTest
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/test_Model.cc"
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/test_Implicants.cc"
     )
 
 target_link_libraries(ModelTest api_static gtest gtest_main)
