@@ -33,6 +33,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "PartitionInfo.h"
 #include "CgTypes.h"
 
+#include <unordered_set>
+
 
 
 class SStore;
@@ -493,9 +495,16 @@ class Logic {
 
     // Generalization related stuff
 public:
-    PTRef generalize(PTRef fla, vec<PTRef> variablesToEliminate, Model & model);
+    PTRef generalize(PTRef fla, vec<PTRef> const & variablesToEliminate, Model & model);
+protected:
+    using implicant_t = std::unordered_set<PtAsgn, PtAsgnHash>;
 private:
-    std::vector<PTRef> getImplicant(PTRef fla, Model & model);
+
+    implicant_t getImplicant(PTRef fla, Model & model);
+    PTRef modelBasedProjection(vec<PTRef> const & variablesToEliminate, implicant_t implicant, Model & model);
+    virtual implicant_t modelBasedProjectionSingleVar(PTRef var, implicant_t implicant, Model & model) {
+        throw std::logic_error{"Not implemented for this logic!"};
+    }
 
 };
 

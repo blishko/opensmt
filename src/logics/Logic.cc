@@ -32,6 +32,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "SMTConfig.h"
 #include "SubstLoopBreaker.h"
 #include "Model.h"
+#include "TermVisitor.h"
 
 #include <queue>
 #include <set>
@@ -2342,16 +2343,30 @@ void  Logic::purify     (PTRef r, PTRef& p, lbool& sgn) const {p = r; sgn = l_Tr
 
 inline int     Logic::verbose                       ( ) const { return config.verbosity(); }
 
-PTRef Logic::generalize(PTRef fla, vec<PTRef> variablesToEliminate, Model & model) {
+PTRef Logic::generalize(PTRef fla, vec<PTRef> const & variablesToEliminate, Model & model) {
     PTRef val = model.evaluate(fla);
     if (val != this->getTerm_true()) {
         throw std::logic_error{"Formula did not evaluate to true in given model"};
     }
-
     auto implicant = getImplicant(fla, model);
-    throw "Not implemented yet!";
+    PTRef res = modelBasedProjection(variablesToEliminate, implicant, model);
+    return res;
 }
 
-std::vector<PTRef> Logic::getImplicant(PTRef fla, Model &model) {
-    throw "Not implemented yet!";
+std::unordered_set<PtAsgn, PtAsgnHash> Logic::getImplicant(PTRef fla, Model &model) {
+    CollectImplicantTermVisitor visitor(*this, model);
+    visitor.visit(fla);
+    return visitor.getImplicant();
+}
+
+PTRef
+Logic::modelBasedProjection(const vec<PTRef> & variablesToEliminate, Logic::implicant_t implicant, Model & model) {
+    for (PTRef var : variablesToEliminate) {
+        implicant = modelBasedProjectionSingleVar(var, std::move(implicant), model);
+    }
+    vec<PTRef> finalArgs;
+    for (PtAsgn literal : implicant) {
+        finalArgs.push(literal.sgn == l_True ? literal.tr : this->mkNot(literal.tr));
+    }
+    return this->mkAnd(finalArgs);
 }

@@ -49,6 +49,26 @@ bool LALogic::isLinearTerm(PTRef tr) const {
     return false;
 }
 
+std::pair<PTRef, PTRef> LALogic::splitLinearFactorToVarAndConst(PTRef tr) const {
+    assert(isLinearFactor(tr));
+    PTRef var;
+    PTRef constant;
+    this->splitTermToVarAndConst(tr, var, constant);
+    return {var, constant};
+}
+
+vec<std::pair<PTRef, PTRef>> LALogic::splitLinearTermToFactors(PTRef tr) const {
+    vec<std::pair<PTRef, PTRef>> factors;
+    assert(this->isLinearTerm(tr));
+    if (isLinearFactor(tr)) { return {this->splitLinearFactorToVarAndConst(tr)}; }
+
+    Pterm const & t = this->getPterm(tr);
+    for (int i = 0; i < t.size(); ++i) {
+        factors.push(splitLinearFactorToVarAndConst(t[i]));
+    }
+    return factors;
+}
+
 const opensmt::Number&
 LALogic::getNumConst(PTRef tr) const
 {

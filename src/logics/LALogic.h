@@ -148,6 +148,8 @@ public:
     virtual bool isNegated(PTRef tr) const;
     virtual bool isLinearTerm(PTRef tr) const;
     virtual bool isLinearFactor(PTRef tr) const;
+    vec<std::pair<PTRef, PTRef>> splitLinearTermToFactors(PTRef tr) const;
+    std::pair<PTRef, PTRef> splitLinearFactorToVarAndConst(PTRef tr) const;
     virtual void splitTermToVarAndConst(const PTRef &term, PTRef &var, PTRef &fac) const;
     virtual PTRef normalizeSum(PTRef sum);
     virtual PTRef normalizeMul(PTRef mul);
