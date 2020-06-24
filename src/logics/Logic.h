@@ -496,10 +496,7 @@ class Logic {
     // Generalization related stuff
 public:
     PTRef generalize(PTRef fla, vec<PTRef> const & variablesToEliminate, Model & model);
-protected:
     using implicant_t = std::unordered_set<PtAsgn, PtAsgnHash>;
-private:
-
     implicant_t getImplicant(PTRef fla, Model & model);
     PTRef modelBasedProjection(vec<PTRef> const & variablesToEliminate, implicant_t implicant, Model & model);
     virtual implicant_t modelBasedProjectionSingleVar(PTRef var, implicant_t implicant, Model & model) {

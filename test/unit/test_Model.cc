@@ -121,11 +121,6 @@ protected:
     std::unique_ptr<Opensmt> getLRAOsmt() {
         return std::unique_ptr<Opensmt>(new Opensmt(opensmt_logic::qf_lra, "test"));
     }
-
-    std::unique_ptr<Opensmt> getUFOsmt() {
-        return std::unique_ptr<Opensmt>(new Opensmt(opensmt_logic::qf_uf, "test"));
-    }
-
 };
 
 TEST_F(ModelIntegrationTest, testSingleAssert) {

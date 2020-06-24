@@ -120,6 +120,16 @@ target_link_libraries(ModelTest api_static gtest gtest_main)
 gtest_add_tests(TARGET ModelTest)
 
 
+add_executable(GeneralizationTest)
+target_sources(GeneralizationTest
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/test_Generalization.cc"
+
+    )
+
+target_link_libraries(GeneralizationTest api_static gtest gtest_main)
+gtest_add_tests(TARGET GeneralizationTest)
+
+
 add_executable(RegressionTest)
 target_sources(RegressionTest
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/test_LIARegression.cc"

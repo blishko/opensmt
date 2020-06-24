@@ -183,7 +183,7 @@ public:
         BoundType type = bound.type;
         switch(type) {
             case BoundType::EXACT:
-                return bound.val == this->val ? logic.getTerm_true() : logic.getTerm_false();
+                return logic.mkEq(bound.val, val);
             case BoundType::LOWER:
                 return logic.mkNumLt(bound.val, val);
             case BoundType::UPPER:
@@ -374,9 +374,19 @@ Logic::implicant_t LRALogic::modelBasedProjectionSingleVar(PTRef var, Logic::imp
     implicant_t newLiterals;
     for (Bound bound : bounds) {
         PTRef subResult = substitution->substitute(bound);
-        PtAsgn newLiteral = this->isNot(subResult) ? PtAsgn(this->getPterm(subResult)[0], l_False)
-            : PtAsgn(subResult, l_True);
-        newLiterals.insert(newLiteral);
+        if (isNumEq(subResult)) { // special case, which we need to handle
+            PTRef lhs = this->getPterm(subResult)[0];
+            PTRef rhs = this->getPterm(subResult)[1];
+            newLiterals.insert(PtAsgn(this->mkNumLeq(lhs, rhs), l_True));
+            newLiterals.insert(PtAsgn(this->mkNumLeq(rhs, lhs), l_True));
+        }
+        else {
+            PtAsgn newLiteral = this->isNot(subResult) ? PtAsgn(this->getPterm(subResult)[0], l_False)
+                                                       : PtAsgn(subResult, l_True);
+            newLiterals.insert(newLiteral);
+        }
     }
+    // don't forget the literals not containing the var to eliminate
+    newLiterals.insert(interestingEnd, literals.end());
     return newLiterals;
 }
