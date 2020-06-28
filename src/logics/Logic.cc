@@ -2029,7 +2029,7 @@ void Logic::conjoinItes(PTRef root, PTRef& new_root)
         assert(id < size);
         if (!seen[id]) {
             if (isVar(c_term.symb()) && isIteVar(current)) {
-                PTRef ite = getTopLevelIte(current);
+                PTRef ite = getTopLevelIte(current).repr;
                 args.push(ite);
                 queue.push_back(ite);
             }
@@ -2232,8 +2232,6 @@ Logic::collectStats(PTRef root, int& n_of_conn, int& n_of_eq, int& n_of_uf, int&
     }
 }
 
-bool Logic::isIteVar(PTRef tr) const { return top_level_ites.has(tr); }
-PTRef Logic::getTopLevelIte(PTRef tr) { return top_level_ites[tr].repr; }
 void Logic::conjoinExtras(PTRef root, PTRef& new_root) { conjoinItes(root, new_root); }
 
 IdRef       Logic::newIdentifier (const char* name)            { return id_store.newIdentifier(name); }

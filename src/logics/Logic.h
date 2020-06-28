@@ -110,12 +110,12 @@ class Logic {
     vec<bool>           constants;
     vec<bool>           interpreted_functions;
 
-    typedef struct{
+    struct Ite {
         PTRef i;
         PTRef t;
         PTRef e;
         PTRef repr;
-    } Ite;
+    };
     Map<PTRef,Ite,PTRefHash,Equal<PTRef>>    top_level_ites;
 
     SMTConfig&          config;
@@ -189,8 +189,8 @@ class Logic {
     Logic(SMTConfig& c);
     virtual ~Logic();
 
-    bool isIteVar(PTRef tr) const;// { return top_level_ites.has(tr); }
-    PTRef getTopLevelIte(PTRef tr);// { return top_level_ites[tr].repr; }
+    bool isIteVar(PTRef tr) const { return top_level_ites.has(tr); }
+    Ite getTopLevelIte(PTRef tr) { return top_level_ites[tr]; }
 
 
     virtual void conjoinExtras(PTRef root, PTRef& new_root);// { conjoinItes(root, new_root); }

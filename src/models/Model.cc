@@ -13,6 +13,16 @@ PTRef Model::evaluate(PTRef term) {
         return term;
     }
 
+    if (logic.isIteVar(term)) { // special handling of ite terms
+        auto ite = logic.getTopLevelIte(term);
+        PTRef cVal = evaluate(ite.i);
+        assert (cVal == logic.getTerm_true() || cVal == logic.getTerm_false());
+        PTRef chosenBranch = cVal == logic.getTerm_true() ? ite.t : ite.e;
+        PTRef res = evaluate(chosenBranch);
+        addDerivedVal(term, res);
+        return res;
+    }
+
     if (logic.isVar(term)) {
         if (hasVarVal(term)) {
             return getVarVal(term);

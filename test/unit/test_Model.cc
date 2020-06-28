@@ -111,7 +111,23 @@ TEST_F(LAModelTest, test_derivedArithmeticAtoms) {
     EXPECT_EQ(model->evaluate(logic.mkNumLt(x, z)), fval);
     EXPECT_EQ(model->evaluate(logic.mkNumGeq(x, z)), tval);
     EXPECT_EQ(model->evaluate(logic.mkNumGt(x, z)), fval);
+}
 
+TEST_F(LAModelTest, test_simpleBooleanITE) {
+    auto model = getModel();
+    PTRef ite = logic.mkIte(a, logic.mkNumLeq(x, y), logic.mkNumLeq(y,x));
+    auto res = model->evaluate(ite);
+
+    EXPECT_EQ(res, logic.getTerm_false());
+}
+
+TEST_F(LAModelTest, test_simpleRealITE) {
+    auto model = getModel();
+    PTRef ite = logic.mkIte(b, x, logic.mkNumTimes(logic.mkConst("2"), x));
+    auto res = model->evaluate(ite);
+
+//    std::cout << logic.printTerm(res) << std::endl;
+    EXPECT_EQ(res, logic.mkConst("2"));
 }
 
 
@@ -171,5 +187,6 @@ TEST_F(ModelIntegrationTest, testTrivialBooleanSubstitutionNegation) {
     EXPECT_EQ(model->evaluate(x), logic.getTerm_false());
     EXPECT_EQ(model->evaluate(fla), logic.getTerm_true());
 }
+
 
 
