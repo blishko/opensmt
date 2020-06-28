@@ -2348,14 +2348,20 @@ PTRef Logic::generalize(PTRef fla, vec<PTRef> const & variablesToEliminate, Mode
     if (val != this->getTerm_true()) {
         throw std::logic_error{"Formula did not evaluate to true in given model"};
     }
+    if (fla == this->getTerm_true()) {
+        return this->getTerm_true();
+    }
     auto implicant = getImplicant(fla, model);
     PTRef res = modelBasedProjection(variablesToEliminate, implicant, model);
     return res;
 }
 
 std::unordered_set<PtAsgn, PtAsgnHash> Logic::getImplicant(PTRef fla, Model &model) {
+    ToNNFVisitor nnfvisitor(*this);
+    nnfvisitor.visit(fla);
+    PTRef nnf = nnfvisitor.getNNF();
     CollectImplicantTermVisitor visitor(*this, model);
-    visitor.visit(fla);
+    visitor.visit(nnf);
     return visitor.getImplicant();
 }
 

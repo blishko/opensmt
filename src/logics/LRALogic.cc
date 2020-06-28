@@ -252,25 +252,51 @@ Logic::implicant_t LRALogic::modelBasedProjectionSingleVar(PTRef var, Logic::imp
     assert(isNumVar(var));
     // proper elimination of Real variable
 
-    std::vector<PtAsgn> literals(implicant.begin(), implicant.end());
-    auto containsVar = [var, this](PtAsgn lit) {
+    std::vector<PtAsgn> literals; // collect literals in std::vector, and also deal with equalities
+    for (PtAsgn ptasgn : implicant) {
+        if (isNumEq(ptasgn.tr)) { // special handling of equality
+            PTRef lhs = getPterm(ptasgn.tr)[0];
+            PTRef rhs = getPterm(ptasgn.tr)[1];
+            if (ptasgn.sgn == l_True) { // just put both inequalities there
+                literals.push_back(PtAsgn(mkNumLeq(lhs, rhs), l_True));
+                literals.push_back(PtAsgn(mkNumLeq(rhs, lhs), l_True));
+            } else if (ptasgn.sgn == l_False) {
+                PTRef lt = mkNumLt(lhs, rhs);
+                PTRef gt = mkNumGt(lhs, rhs);
+                PTRef valid = model.evaluate(lt) == getTerm_true() ? lt : gt;
+                assert(model.evaluate(valid) == getTerm_true());
+                assert(isNot(valid)); // strict inequality is negation of non-strict one
+                literals.push_back(PtAsgn(getPterm(valid)[0], l_False));
+            }
+        }
+        else { // just copy the element if it is not TRUE
+            if (not (isTrue(ptasgn.tr) && ptasgn.sgn == l_True)) {
+                literals.push_back(ptasgn);
+            }
+        }
+    }
+    LRALogic& logic = *this;
+    auto containsVar = [var, &logic](PtAsgn lit) {
         PTRef atom = lit.tr;
-        if (this->isBoolAtom(atom)) { return false;}
-        assert(isNumLeq(atom));
+        if (logic.isBoolAtom(atom)) { return false;}
+        assert(logic.isNumLeq(atom) || logic.isNumEq(atom));
+        if (logic.isNumEq(atom)) {
+            atom = logic.mkNumLeq(logic.getPterm(atom)[0], logic.getPterm(atom)[1]);
+        }
         // inequalities have form "constant <= term"
-        PTRef term = this->getPterm(atom)[1];
-        assert(this->isLinearTerm(term));
-        auto getVarFromFactor = [this](PTRef factor) {
+        PTRef term = logic.getPterm(atom)[1];
+        assert(logic.isLinearTerm(term));
+        auto getVarFromFactor = [&logic](PTRef factor) {
             PTRef fvar, constant;
-            this->splitTermToVarAndConst(factor, fvar, constant);
+            logic.splitTermToVarAndConst(factor, fvar, constant);
             return fvar;
         };
-        if (this->isLinearFactor(term)) {
+        if (logic.isLinearFactor(term)) {
             return getVarFromFactor(term) == var;
         } else {
-            assert(isNumPlus(term));
-            for (int i = 0; i < this->getPterm(term).size(); ++i) {
-                PTRef factor = this->getPterm(term)[i];
+            assert(logic.isNumPlus(term));
+            for (int i = 0; i < logic.getPterm(term).size(); ++i) {
+                PTRef factor = logic.getPterm(term)[i];
                 PTRef factorVar = getVarFromFactor(factor);
                 if (factorVar == var) { return true; }
             }

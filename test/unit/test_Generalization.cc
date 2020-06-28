@@ -202,3 +202,33 @@ TEST_F(LAModelTest, test_eliminateBoolAndRealVar) {
     EXPECT_EQ(res, logic.getTerm_true());
 }
 
+TEST_F(LAModelTest, test_eliminateTwoRealVars) {
+    PTRef xp = logic.mkNumVar("xp");
+    PTRef yp = logic.mkNumVar("yp");
+    PTRef one = logic.getTerm_NumOne();
+
+    // A1: x' = x + 1
+    // A2: y' = y + 1
+    // A3: y' = 1
+
+    PTRef a1 = logic.mkEq(xp, logic.mkNumPlus(vec<PTRef>{x, one}));
+    PTRef a2 = logic.mkEq(yp, logic.mkNumPlus(vec<PTRef>{y, one}));
+    PTRef a3 = logic.mkEq(yp, one);
+    vec<PTRef> vars {xp, yp};
+    ExplicitModel model(logic, Model::Evaluation {
+        std::make_pair(x, logic.getTerm_NumZero()),
+        std::make_pair(y, logic.getTerm_NumZero()),
+        std::make_pair(xp, one),
+        std::make_pair(yp, one)
+    });
+    vec<PTRef> args{a1, a2, a3};
+    PTRef fla = logic.mkAnd(args);
+    auto res = logic.generalize(fla, vars, model);
+
+//    std::cout << logic.printTerm(res) << std::endl;
+
+    EXPECT_EQ(model.evaluate(res), logic.getTerm_true());
+}
+
+
+
