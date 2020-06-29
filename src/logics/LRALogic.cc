@@ -29,6 +29,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "TreeOps.h"
 #include "LA.h"
 #include "Model.h"
+#include "TermVisitor.h"
 
 const char* LRALogic::e_nonlinear_term = "Logic does not support nonlinear terms";
 
@@ -415,4 +416,10 @@ Logic::implicant_t LRALogic::modelBasedProjectionSingleVar(PTRef var, Logic::imp
     // don't forget the literals not containing the var to eliminate
     newLiterals.insert(interestingEnd, literals.end());
     return newLiterals;
+}
+
+Logic::implicant_t LRALogic::getImplicant(PTRef fla, Model & model) {
+    LRACollectImplicantTermVisitor visitor(*this, model);
+    visitor.visit(fla);
+    return visitor.getImplicant();
 }

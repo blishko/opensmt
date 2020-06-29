@@ -6,6 +6,7 @@
 #include <LRALogic.h>
 #include <SMTConfig.h>
 #include <Model.h>
+#include <TreeOps.h>
 
 
 class LAModelTest : public ::testing::Test {
@@ -229,6 +230,30 @@ TEST_F(LAModelTest, test_eliminateTwoRealVars) {
 
     EXPECT_EQ(model.evaluate(res), logic.getTerm_true());
 }
+
+TEST_F(LAModelTest, test_generalizeWithITE) {
+    // y = a ? x + 1 : x + 2
+    // y >= 1
+    // eliminate y
+
+    PTRef xPlusOne = logic.mkNumPlus(vec<PTRef>{x, logic.getTerm_NumOne()});
+    PTRef xPlusTwo = logic.mkNumPlus(vec<PTRef>{x, logic.mkConst("2")});
+    PTRef ite = logic.mkIte(a, xPlusOne, xPlusTwo);
+    PTRef eq = logic.mkEq(y, ite);
+    PTRef fla = logic.mkAnd(eq, logic.mkNumLeq(logic.getTerm_NumOne(), y));
+    auto model = getModel();
+    ASSERT_EQ(model->evaluate(fla), logic.getTerm_true());
+    PTRef res = logic.generalize(fla, {y}, *model);
+
+//    std::cout << logic.printTerm(res) << std::endl;
+    ASSERT_EQ(model->evaluate(res), logic.getTerm_true());
+
+    // Check that the ITE var is not present in the generalization
+    Map<PTRef, bool, PTRefHash> vars;
+    getVars(res, logic, vars);
+    ASSERT_FALSE(vars.has(ite));
+}
+
 
 
 

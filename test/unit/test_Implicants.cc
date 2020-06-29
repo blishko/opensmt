@@ -46,9 +46,7 @@ TEST_F(LAImplicantTest, test_singleClause) {
     };
     ExplicitModel model {logic, eval};
     {
-        CollectImplicantTermVisitor visitor(logic, model);
-        visitor.visit(clause_singleLit);
-        auto implicant = visitor.getImplicant();
+        auto implicant = logic.getImplicant(clause_singleLit, model);
         // single literal is satisfied in the clause
         ASSERT_EQ(implicant.size(), 1);
         EXPECT_EQ(implicant.begin()->tr, a);
@@ -57,9 +55,7 @@ TEST_F(LAImplicantTest, test_singleClause) {
     {
         args[1] = logic.mkNot(b);
         PTRef clause_twoLits = logic.mkOr(args);
-        CollectImplicantTermVisitor visitor(logic, model);
-        visitor.visit(clause_twoLits);
-        auto implicant = visitor.getImplicant();
+        auto implicant = logic.getImplicant(clause_twoLits, model);
         // single literal is satisfied in the clause
         EXPECT_LE(implicant.size(), 2);
         ASSERT_GE(implicant.size(), 1);
@@ -82,9 +78,7 @@ TEST_F(LAImplicantTest, test_singleCube) {
             std::make_pair(b, logic.getTerm_false())
     };
     ExplicitModel model {logic, eval};
-    CollectImplicantTermVisitor visitor(logic, model);
-    visitor.visit(cube);
-    auto implicant = visitor.getImplicant();
+    auto implicant = logic.getImplicant(cube, model);
     // single literal is satisfied in the clause
     ASSERT_EQ(implicant.size(), 3);
     EXPECT_TRUE(implicant.find(PtAsgn(a,l_True)) != implicant.end());
@@ -107,9 +101,7 @@ TEST_F(LAImplicantTest, test_simpleCNF) {
     };
     ExplicitModel model {logic, eval};
     ASSERT_EQ(model.evaluate(cnf), trueTerm);
-    CollectImplicantTermVisitor visitor(logic, model);
-    visitor.visit(cnf);
-    auto implicant = visitor.getImplicant();
+    auto implicant = logic.getImplicant(cnf, model);
     // single literal is satisfied in the clause
     ASSERT_EQ(implicant.size(), 2);
     EXPECT_TRUE(implicant.find(PtAsgn(a,l_True)) != implicant.end());
@@ -138,9 +130,7 @@ TEST_F(LAImplicantTest, test_simpleNNF) {
         };
         ExplicitModel model{logic, eval};
         ASSERT_EQ(model.evaluate(nnf), trueTerm);
-        CollectImplicantTermVisitor visitor(logic, model);
-        visitor.visit(nnf);
-        auto implicant = visitor.getImplicant();
+        auto implicant = logic.getImplicant(nnf, model);
         // single literal is satisfied in the clause
         ASSERT_EQ(implicant.size(), 1);
         EXPECT_TRUE(implicant.find(PtAsgn(a, l_True)) != implicant.end());
@@ -151,9 +141,7 @@ TEST_F(LAImplicantTest, test_simpleNNF) {
         };
         ExplicitModel model{logic, eval};
         ASSERT_EQ(model.evaluate(nnf), trueTerm);
-        CollectImplicantTermVisitor visitor(logic, model);
-        visitor.visit(nnf);
-        auto implicant = visitor.getImplicant();
+        auto implicant = logic.getImplicant(nnf, model);
         // single literal is satisfied in the clause
         ASSERT_EQ(implicant.size(), 1);
         EXPECT_TRUE(implicant.find(PtAsgn(b, l_True)) != implicant.end());

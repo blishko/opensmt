@@ -133,6 +133,7 @@ public:
     virtual const SRef get_sort_NUM () const override;
 
     virtual implicant_t modelBasedProjectionSingleVar(PTRef var, implicant_t implicant, Model & model) override;
+    virtual implicant_t getImplicant(PTRef fla, Model & model) override;
 };
 
 #endif

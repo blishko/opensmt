@@ -2354,15 +2354,6 @@ PTRef Logic::generalize(PTRef fla, vec<PTRef> const & variablesToEliminate, Mode
     return res;
 }
 
-std::unordered_set<PtAsgn, PtAsgnHash> Logic::getImplicant(PTRef fla, Model &model) {
-    ToNNFVisitor nnfvisitor(*this);
-    nnfvisitor.visit(fla);
-    PTRef nnf = nnfvisitor.getNNF();
-    CollectImplicantTermVisitor visitor(*this, model);
-    visitor.visit(nnf);
-    return visitor.getImplicant();
-}
-
 PTRef
 Logic::modelBasedProjection(const vec<PTRef> & variablesToEliminate, Logic::implicant_t implicant, Model & model) {
     for (PTRef var : variablesToEliminate) {

@@ -497,7 +497,9 @@ class Logic {
 public:
     PTRef generalize(PTRef fla, vec<PTRef> const & variablesToEliminate, Model & model);
     using implicant_t = std::unordered_set<PtAsgn, PtAsgnHash>;
-    implicant_t getImplicant(PTRef fla, Model & model);
+    virtual implicant_t getImplicant(PTRef fla, Model & model) {
+        throw std::logic_error{"Not implemented for this logic!"};
+    }
     PTRef modelBasedProjection(vec<PTRef> const & variablesToEliminate, implicant_t implicant, Model & model);
     virtual implicant_t modelBasedProjectionSingleVar(PTRef var, implicant_t implicant, Model & model) {
         throw std::logic_error{"Not implemented for this logic!"};
