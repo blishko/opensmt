@@ -92,8 +92,18 @@ PTRef CollectImplicantTermVisitor::visitAndSimplify(PTRef term) {
     } else if (logic.isAtom(term)) { // Theory-specific handling of theory atoms
         assert(logic.isTheoryTerm(term));
         simplified = simplifyAndVisitTheoryAtom(term);
+    } else if (logic.isEquality(term)) {
+        assert(not logic.isTheoryEquality(term));
+        // equality of boolean terms
+        PTRef lhs = logic.getPterm(term)[0];
+        PTRef rhs = logic.getPterm(term)[1];
+        PTRef simplifiedLHS = visitAndSimplify(lhs);
+        PTRef simplifiedRHS = visitAndSimplify(rhs);
+        simplified = (lhs == simplifiedLHS && rhs == simplifiedRHS) ? term
+            : logic.mkEq(simplifiedLHS, simplifiedRHS);
     }
     if (simplified == PTRef_Undef) {
+        std::cerr << logic.printTerm(term) << std::endl;
         throw std::logic_error{"Unsupported structure of formula"};
     }
     cacheResults(term, simplified);

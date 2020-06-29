@@ -147,3 +147,16 @@ TEST_F(LAImplicantTest, test_simpleNNF) {
         EXPECT_TRUE(implicant.find(PtAsgn(b, l_True)) != implicant.end());
     }
 }
+
+TEST_F(LAImplicantTest, test_BooleanEquality) {
+    Model::Evaluation eval {
+        std::make_pair(a, logic.getTerm_true()),
+        std::make_pair(b, logic.getTerm_false())
+    };
+    ExplicitModel model{logic, eval};
+    PTRef fla = logic.mkEq(logic.mkNot(a), b);
+    auto implicant = logic.getImplicant(fla, model);
+    ASSERT_EQ(implicant.size(), 2);
+    EXPECT_TRUE(implicant.find(PtAsgn(b, l_False)) != implicant.end());
+    EXPECT_TRUE(implicant.find(PtAsgn(a, l_True)) != implicant.end());
+}
