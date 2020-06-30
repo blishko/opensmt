@@ -31,6 +31,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "Model.h"
 #include "TermVisitor.h"
 
+#include <memory>
+
 const char* LRALogic::e_nonlinear_term = "Logic does not support nonlinear terms";
 
 /***********************************************************
