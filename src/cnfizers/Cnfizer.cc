@@ -67,8 +67,9 @@ Cnfizer::solve(vec<FrameId>& en_frames)
 {
     vec<Lit> assumps;
     // Initialize so that by default frames are disabled
-    for (int i = 0; i < frame_terms.size(); i++)
+    for (int i = 0; i < frame_terms.size(); i++) {
         assumps.push(this->getOrCreateLiteralFor(frame_terms[i]));
+    }
 
     // Enable the terms which are listed in en_frames
     // At this point assumps has the same size as frame_terms and the
@@ -76,7 +77,11 @@ Cnfizer::solve(vec<FrameId>& en_frames)
     // corresponding literals
     for (int i = 0; i < en_frames.size(); i++) {
         int asmp_idx = en_frames[i].id;
-        assumps[asmp_idx] = ~assumps[asmp_idx];
+        assert(asmp_idx >= 0);
+        // MB: It can happen that a frame is empty and a frame_term has not been created for it
+        if (asmp_idx < assumps.size()) {
+            assumps[asmp_idx] = ~assumps[asmp_idx];
+        }
     }
     // Filter out the lit_Trues and lit_Falses used as empty values
     Lit lit_true = this->getOrCreateLiteralFor(logic.getTerm_true());
