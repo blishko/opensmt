@@ -406,9 +406,11 @@ void CoreSMTSolver::removeClause(CRef cr)
 
 bool CoreSMTSolver::satisfied(const Clause& c) const
 {
-    for (unsigned i = 0; i < c.size(); i++)
-        if (value(c[i]) == l_True)
+    for (unsigned i = 0; i < c.size(); i++) {
+        if (value(c[i]) == l_True) {
             return true;
+        }
+    }
     return false;
 }
 
@@ -439,7 +441,7 @@ void CoreSMTSolver::cancelUntil(int level)
     }
 }
 
-void CoreSMTSolver::printClause(Clause & cl) {
+void CoreSMTSolver::printClause(const Clause & cl) const {
     for (unsigned i = 0; i < cl.size(); ++i) {
         std::cout << cl[i] << ' ';
     }
@@ -1305,8 +1307,9 @@ void CoreSMTSolver::removeSatisfied(vec<CRef>& cs)
     for (i = j = 0; i < cs.size(); i++)
     {
         Clause& c = ca[cs[i]];
-        if (satisfied(c))
+        if (satisfied(c)) {
             removeClause(cs[i]);
+        }
         else
             cs[j++] = cs[i];
     }

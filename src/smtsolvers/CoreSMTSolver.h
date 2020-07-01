@@ -659,7 +659,7 @@ public:
     template<class C>
     void     printClause      (const C& c);
     void     printClause      ( CRef );
-    void     printClause      ( Clause& );
+    void     printClause      ( const Clause& ) const;
     //void     printClause      ( vec< Lit > & );
 
 	void   populateClauses  (vec<PTRef> & clauses, const vec<CRef> & crefs, unsigned int limit = std::numeric_limits<unsigned int>::max());
