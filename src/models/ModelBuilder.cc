@@ -30,7 +30,13 @@ void ModelBuilder::processSubstitutions(TGetModel getModel) {
             PTRef mappedTerm = entry->data.tr;
             PTRef val = model->evaluate(mappedTerm);
             assert(logic.isConstant(val));
-            assignCopy.insert(std::make_pair(entry->key, val));
+            auto res = assignCopy.insert(std::make_pair(entry->key, val));
+            if (!res.second && val != res.first->second) {
+                assert(false);
+                std::cerr << "Inconsistent values for " << logic.printTerm(entry->key)
+                    << ": " << logic.printTerm(res.first->second) << " and " << logic.printTerm(val) << std::endl;
+                throw std::logic_error("Inconsistency when building model\n");
+            }
         }
     }
     this->assignment = std::move(assignCopy);
