@@ -37,6 +37,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <queue>
 #include <set>
 #include <sys/wait.h>
+#include <numeric>
 
 
 using namespace std;
@@ -356,16 +357,16 @@ Logic::printTerm_(PTRef tr, bool ext, bool safe) const
     char* out;
 
     if (safe && this->isIteVar(tr)) {
-        Ite ite = top_level_ites[tr];
-        char *str_i = printTerm_(ite.i, ext, safe);
-        char *str_t = printTerm_(ite.t, ext, safe);
-        char *str_e = printTerm_(ite.e, ext, safe);
+        Logic const& logic = *this;
+        Cases cases = generalizedITEs[tr];
+        std::string base { printTerm_(cases.defaultRes, ext, safe) };
+        auto res = std::accumulate(cases.cases.begin(), cases.cases.end(), base,
+            [&logic, ext, safe](std::string const& acc, Cases::Case kase)  {
+            return std::string("(ite ") + logic.printTerm_(kase.condition, ext, safe)  + ' ' + logic.printTerm(kase.result, ext, safe) + ' ' + acc + ')';
+        });
 
-        int res = asprintf(&out, "(ite %s %s %s)", str_i, str_t, str_e);
-        assert(res >= 0); (void)res;
-
-        free(str_i); free(str_t); free(str_e);
-
+        int written = asprintf(&out, "%s", res.c_str());
+        assert(written >= 0); (void)written;
         return out;
     }
 
@@ -703,14 +704,17 @@ Logic::getDefaultValuePTRef(const SRef sref) const {
 PTRef
 Logic::mkIte(vec<PTRef>& args)
 {
-    if (!hasSortBool(args[0])) return PTRef_Undef;
+    PTRef condition = args[0];
+    if (!hasSortBool(condition)) return PTRef_Undef;
     assert(args.size() == 3);
-    if (isTrue(args[0]))    return args[1];
-    if (isFalse(args[0]))   return args[2];
-    if (args[1] == args[2]) return args[1];
+    PTRef thenBranch = args[1];
+    PTRef elseBranch = args[2];
+    if (isTrue(condition))    return thenBranch;
+    if (isFalse(condition))   return elseBranch;
+    if (thenBranch == elseBranch) return thenBranch;
 
-    SRef sr = getSortRef(args[1]);
-    if(sr != getSortRef(args[2]))
+    SRef sr = getSortRef(thenBranch);
+    if(sr != getSortRef(elseBranch))
     {
         std::cerr << "ITE with different return sorts" << std::endl;
         // MB: maybe do something more elegant here?
@@ -724,42 +728,83 @@ Logic::mkIte(vec<PTRef>& args)
     PTRef o_ite = mkVar(sr, name);
     free(name);
 
-    vec<PTRef> eq_args;
-    eq_args.push(o_ite);
-    eq_args.push(args[1]);
-    PTRef eq1 = mkEq(eq_args);
-    vec<PTRef> impl_args;
-    impl_args.push(args[0]);
-    impl_args.push(eq1);
-    PTRef if_term = mkImpl(impl_args);
+//    vec<PTRef> eq_args;
+//    eq_args.push(o_ite);
+//    eq_args.push(args[1]);
+//    PTRef eq1 = mkEq(eq_args);
+//    vec<PTRef> impl_args;
+//    impl_args.push(args[0]);
+//    impl_args.push(eq1);
+//    PTRef if_term = mkImpl(impl_args);
+//
+//    eq_args.clear();
+//    eq_args.push(o_ite);
+//    eq_args.push(args[2]);
+//    PTRef eq2 = mkEq(eq_args);
+//    impl_args.clear();
+//    impl_args.push(mkNot(args[0]));
+//    impl_args.push(eq2);
+//    PTRef else_term = mkImpl(impl_args);
+//
+//    vec<PTRef> and_args;
+//    and_args.push(if_term);
+//    and_args.push(else_term);
+//
+//    PTRef repr = mkAnd(and_args);
+//    assert (repr != PTRef_Undef && o_ite != PTRef_Undef);
+//    assert(!top_level_ites.has(o_ite));
 
-    eq_args.clear();
-    eq_args.push(o_ite);
-    eq_args.push(args[2]);
-    PTRef eq2 = mkEq(eq_args);
-    impl_args.clear();
-    impl_args.push(mkNot(args[0]));
-    impl_args.push(eq2);
-    PTRef else_term = mkImpl(impl_args);
+    // ite to cases
 
-    vec<PTRef> and_args;
-    and_args.push(if_term);
-    and_args.push(else_term);
-
-    PTRef repr = mkAnd(and_args);
-    assert (repr != PTRef_Undef && o_ite != PTRef_Undef);
-    assert(!top_level_ites.has(o_ite));
-
-    Ite ite = {
-            .i=args[0],
-            .t=args[1],
-            .e=args[2],
-            .repr=repr
-    };
-
-    top_level_ites.insert(o_ite, ite);
-
+    if (isIteVar(thenBranch) || isIteVar(elseBranch)) {
+        PTRef iteBranch = isIteVar(thenBranch) ? thenBranch : elseBranch;
+        assert(generalizedITEs.has(iteBranch));
+        Cases const& innerIte = generalizedITEs[iteBranch];
+        bool canMerge = this->canMergeCases(condition, innerIte);
+        if (canMerge) {
+            auto merged = innerIte.addCase(Cases::Case{condition, thenBranch});
+            addITE(o_ite, merged);
+            return o_ite;
+        }
+    }
+    //default behaviour
+    Cases cases;
+    cases.defaultRes = elseBranch;
+    cases.cases.push_back(Cases::Case{.condition = condition, .result = thenBranch});
+    addITE(o_ite, cases);
     return o_ite;
+}
+
+bool Logic::canMergeCases(PTRef condition, Cases const& cases) {
+    Logic& logic = *this;
+    auto conditionToVarAndConst = [&logic](PTRef condition) {
+        std::pair<PTRef, PTRef> res = {PTRef_Undef, PTRef_Undef};
+        if (not logic.isEquality(condition)) { return res; }
+        // only equalities for var now
+        PTRef lhs = logic.getPterm(condition)[0];
+        PTRef rhs = logic.getPterm(condition)[1];
+        if (not (logic.isVar(lhs) || logic.isVar(rhs))) { return res; }
+        PTRef var = logic.isVar(lhs) ? lhs : rhs;
+        PTRef val = logic.isVar(lhs) ? rhs : lhs;
+        if (not logic.isConstant(val)) { return res; } // for now just simple situation
+        // successfully split the equality to var and const;
+        res.first = var;
+        res.second = val;
+        return res;
+    };
+    auto varVal = conditionToVarAndConst(condition);
+    PTRef var = varVal.first;
+    PTRef val = varVal.second;
+    if (var == PTRef_Undef) { return false; }
+    for (auto kase : cases.cases) {
+        PTRef oCond = kase.condition;
+        auto oVarVal = conditionToVarAndConst(oCond);
+        PTRef oVar = oVarVal.first;
+        if (oVar == PTRef_Undef or oVar != var) { return false; }
+        PTRef oVal = oVarVal.second;
+        if (oVal == PTRef_Undef or oVal == val) { return false; } // This could be optimized somehow
+    }
+    return true;
 }
 
 // Check if arguments contain trues or a false and return the simplified
@@ -2110,11 +2155,10 @@ Logic::getPartitionA(const ipartitions_t& mask)
         }
     }
     // add ites:
-    vec<Map<PTRef,Ite,PTRefHash,Equal<PTRef>>::Pair> entries;
-    top_level_ites.getKeysAndVals(entries);
+    auto entries = generalizedITEs.getKeysAndValsPtrs();
     for (int i = 0; i < entries.size(); ++i) {
-        if(isAlocal(getIPartitions(entries[i].key), mask)){
-            a_args.push(entries[i].data.repr);
+        if(isAlocal(getIPartitions(entries[i]->key), mask)){
+            a_args.push(getTopLevelIte(entries[i]->key));
         }
     }
     PTRef A = logic.mkAnd(a_args);
@@ -2139,11 +2183,10 @@ Logic::getPartitionB(const ipartitions_t& mask)
         }
     }
     // add ites:
-    vec<Map<PTRef,Ite,PTRefHash,Equal<PTRef>>::Pair> entries;
-    top_level_ites.getKeysAndVals(entries);
+    auto entries = generalizedITEs.getKeysAndValsPtrs();
     for (int i = 0; i < entries.size(); ++i) {
-        if(isBlocal(getIPartitions(entries[i].key), mask)){
-            b_args.push(entries[i].data.repr);
+        if(isBlocal(getIPartitions(entries[i]->key), mask)){
+            b_args.push(getTopLevelIte(entries[i]->key));
         }
     }
     PTRef B = logic.mkAnd(b_args);
@@ -2232,6 +2275,8 @@ Logic::collectStats(PTRef root, int& n_of_conn, int& n_of_eq, int& n_of_uf, int&
     }
 }
 
+bool Logic::isIteVar(PTRef tr) const { return representantsGITE.has(tr); }
+PTRef Logic::getTopLevelIte(PTRef tr) { return representantsGITE[tr]; }
 void Logic::conjoinExtras(PTRef root, PTRef& new_root) { conjoinItes(root, new_root); }
 
 IdRef       Logic::newIdentifier (const char* name)            { return id_store.newIdentifier(name); }

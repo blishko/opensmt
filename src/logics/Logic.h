@@ -110,13 +110,55 @@ class Logic {
     vec<bool>           constants;
     vec<bool>           interpreted_functions;
 
-    struct Ite {
-        PTRef i;
-        PTRef t;
-        PTRef e;
-        PTRef repr;
+//    typedef struct{
+//        PTRef i;
+//        PTRef t;
+//        PTRef e;
+//        PTRef repr;
+//    } Ite;
+
+    struct Cases {
+        struct Case {
+            PTRef condition;
+            PTRef result;
+        };
+        std::vector<Case> cases;
+        PTRef defaultRes;
+
+        Cases() = default;
+
+        Cases addCase(Case kase) const {
+            Cases res;
+            res.defaultRes = this->defaultRes;
+            res.cases = this->cases;
+            res.cases.push_back(kase);
+            return res;
+        }
     };
-    Map<PTRef,Ite,PTRefHash,Equal<PTRef>>    top_level_ites;
+
+    virtual bool canMergeCases(PTRef condition, Cases const& cases);
+
+    void addITE(PTRef iteVar, Cases const & cases) {
+        generalizedITEs.insert(iteVar, cases);
+        // cases to representant
+        // disjunctive version
+        vec<PTRef> defaultCaseConditions;
+        vec<PTRef> casesRepresentations;
+        for (auto kase : cases.cases) {
+            defaultCaseConditions.push(mkNot(kase.condition));
+            casesRepresentations.push(mkAnd(kase.condition, mkEq(kase.result, iteVar)));
+        }
+        defaultCaseConditions.push(mkEq(cases.defaultRes, iteVar));
+        PTRef defaultCaseRepresentation = mkAnd(defaultCaseConditions);
+        assert(defaultCaseRepresentation != PTRef_Undef);
+        casesRepresentations.push(defaultCaseRepresentation);
+        PTRef representation = mkOr(casesRepresentations);
+        assert(representation != PTRef_Undef);
+        representantsGITE.insert(iteVar, representation);
+    }
+
+    Map<PTRef,Cases,PTRefHash,Equal<PTRef>> generalizedITEs;
+    Map<PTRef,PTRef,PTRefHash,Equal<PTRef>> representantsGITE;
 
     SMTConfig&          config;
     IdentifierStore     id_store;
