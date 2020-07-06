@@ -20,8 +20,20 @@ bool LRATheory::simplify(const vec<PFRef>& formulas, int curr)
     } else {
         PTRef coll_f = getCollateFunction(formulas, curr);
         auto subs_res = computeSubstitutions(coll_f);
+        // get substitutions as equalities
+        auto const & subst = subs_res.usedSubstitution;
+        auto const & entries = subst.getKeysAndValsPtrs();
+        vec<PTRef> args;
+        for (auto * entry : entries) {
+            if (entry->data.sgn != l_True) { // disabled substitution
+                continue;
+            }
+            args.push(lralogic.mkEq(entry->key, entry->data.tr));
+        }
         getTSolverHandler().setSubstitutions(subs_res.usedSubstitution);
-        lralogic.simplifyAndSplitEq(subs_res.result, currentFrame.root);
+        args.push(subs_res.result);
+        PTRef addedSubs = lralogic.mkAnd(args);
+        lralogic.simplifyAndSplitEq(addedSubs, currentFrame.root);
     }
     return true;
 }
