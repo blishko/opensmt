@@ -79,12 +79,10 @@ PTRef CollectImplicantTermVisitor::visitAndSimplify(PTRef term) {
             assert(simplified == trueTerm);
         }
     } else if (logic.isIteVar(term)) {
-        auto ite = logic.getTopLevelIte(term);
-        PTRef cond = ite.i;
-        // evaluate condition and based on the value choose the appropriate branch
-        PTRef condSimplified = visitAndSimplify(cond);
-        assert(condSimplified == trueTerm || condSimplified == falseTerm);
-        PTRef chosenBranch = condSimplified == trueTerm ? ite.t : ite.e;
+        auto ite = logic.generalizedITEs[term];
+        auto it = std::find_if(ite.cases.begin(), ite.cases.end(),
+            [this, trueTerm](Logic::Cases::Case const& kase ) { return visitAndSimplify(kase.condition) == trueTerm; });
+        PTRef chosenBranch = it != ite.cases.end() ? it->result : ite.defaultRes;
         assert(logic.hasSortBool(chosenBranch)); // MB: Here we are handling only Boolean ITEs
         simplified = visitAndSimplify(chosenBranch);
     } else if (logic.isBoolAtom(term)) { // must be AFTER ITEs are handled
@@ -311,12 +309,11 @@ PTRef LRACollectImplicantTermVisitor::simplifyAndVisitVariable(PTRef var) {
         return getFromCache(var);
     }
     if (lralogic.isIteVar(var)) {
-        auto ite = lralogic.getTopLevelIte(var);
-        PTRef cond = ite.i;
+        auto ite = logic.generalizedITEs[var];
+        auto it = std::find_if(ite.cases.begin(), ite.cases.end(),
+                               [this](Logic::Cases::Case const& kase ) { return visitAndSimplify(kase.condition) == lralogic.getTerm_true(); });
+        PTRef chosenBranch = it != ite.cases.end() ? it->result : ite.defaultRes;
         // evaluate condition and based on the value choose the appropriate branch
-        PTRef condSimplified = visitAndSimplify(cond);
-        assert(condSimplified == lralogic.getTerm_true() || condSimplified == lralogic.getTerm_false());
-        PTRef chosenBranch = condSimplified == lralogic.getTerm_true() ? ite.t : ite.e;
         assert(lralogic.hasSortNum(chosenBranch));
         PTRef simplifiedVar = simplifyAndVisitLinearTerm(chosenBranch);
         cacheResults(var, simplifiedVar);

@@ -14,10 +14,10 @@ PTRef Model::evaluate(PTRef term) {
     }
 
     if (logic.isIteVar(term)) { // special handling of ite terms
-        auto ite = logic.getTopLevelIte(term);
-        PTRef cVal = evaluate(ite.i);
-        assert (cVal == logic.getTerm_true() || cVal == logic.getTerm_false());
-        PTRef chosenBranch = cVal == logic.getTerm_true() ? ite.t : ite.e;
+        auto ite = logic.generalizedITEs[term];
+        auto it = std::find_if(ite.cases.begin(), ite.cases.end(),
+                               [this](Logic::Cases::Case const& kase ) { return evaluate(kase.condition) == logic.getTerm_true(); });
+        PTRef chosenBranch = it != ite.cases.end() ? it->result : ite.defaultRes;
         PTRef res = evaluate(chosenBranch);
         addDerivedVal(term, res);
         return res;

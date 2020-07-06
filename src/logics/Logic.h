@@ -116,7 +116,7 @@ class Logic {
 //        PTRef e;
 //        PTRef repr;
 //    } Ite;
-
+public:
     struct Cases {
         struct Case {
             PTRef condition;
@@ -135,6 +135,8 @@ class Logic {
             return res;
         }
     };
+
+protected:
 
     virtual bool canMergeCases(PTRef condition, Cases const& cases);
 
@@ -157,8 +159,11 @@ class Logic {
         representantsGITE.insert(iteVar, representation);
     }
 
+public:
     Map<PTRef,Cases,PTRefHash,Equal<PTRef>> generalizedITEs;
+protected:
     Map<PTRef,PTRef,PTRefHash,Equal<PTRef>> representantsGITE;
+
 
     SMTConfig&          config;
     IdentifierStore     id_store;
@@ -231,8 +236,8 @@ class Logic {
     Logic(SMTConfig& c);
     virtual ~Logic();
 
-    bool isIteVar(PTRef tr) const { return top_level_ites.has(tr); }
-    Ite getTopLevelIte(PTRef tr) { return top_level_ites[tr]; }
+    bool isIteVar(PTRef tr) const;
+    PTRef getTopLevelIte(PTRef tr);
 
 
     virtual void conjoinExtras(PTRef root, PTRef& new_root);// { conjoinItes(root, new_root); }
