@@ -30,6 +30,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "LA.h"
 #include "Model.h"
 #include "TermVisitor.h"
+#include "LogicUtils.h"
 
 #include <memory>
 
@@ -423,5 +424,5 @@ Logic::implicant_t LRALogic::modelBasedProjectionSingleVar(PTRef var, Logic::imp
 Logic::implicant_t LRALogic::getImplicant(PTRef fla, Model & model) {
     LRACollectImplicantTermVisitor visitor(*this, model);
     visitor.visit(fla);
-    return visitor.getImplicant();
+    return LALogicUtils(*this).compactImplicant(visitor.getImplicant());
 }

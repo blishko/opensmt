@@ -7,6 +7,7 @@
 #include <SMTConfig.h>
 #include <Model.h>
 #include <TermVisitor.h>
+#include <LogicUtils.h>
 
 class LAImplicantTest : public ::testing::Test {
 protected:
@@ -20,6 +21,10 @@ protected:
         b = logic.mkBoolVar("b");
         trueTerm = logic.getTerm_true();
         falseTerm = logic.getTerm_false();
+    }
+
+    PtAsgn inequalityToSignedAtom(PTRef ineq) {
+        return logic.isNot(ineq) ? PtAsgn(logic.mkNot(ineq), l_False) : PtAsgn(ineq, l_True);
     }
 
     SMTConfig config;
@@ -159,4 +164,105 @@ TEST_F(LAImplicantTest, test_BooleanEquality) {
     ASSERT_EQ(implicant.size(), 2);
     EXPECT_TRUE(implicant.find(PtAsgn(b, l_False)) != implicant.end());
     EXPECT_TRUE(implicant.find(PtAsgn(a, l_True)) != implicant.end());
+}
+
+//*********************************************************************************************
+//          Compacting implicant
+//*********************************************************************************************
+
+
+TEST_F(LAImplicantTest, test_CompactImplicant_UpperBothNonStrict) {
+    PtAsgn stronger = inequalityToSignedAtom(logic.mkNumLeq(x, logic.getTerm_NumZero()));
+    PtAsgn weaker = inequalityToSignedAtom(logic.mkNumLeq(x, logic.getTerm_NumOne()));
+
+    Logic::implicant_t implicant {stronger, weaker};
+    LALogicUtils utils{logic};
+    auto compacted = utils.compactImplicant(implicant);
+    ASSERT_EQ(compacted.size(), 1);
+    EXPECT_NE(std::find(compacted.begin(), compacted.end(), stronger), compacted.end());
+    EXPECT_EQ(std::find(compacted.begin(), compacted.end(), weaker), compacted.end());
+}
+
+TEST_F(LAImplicantTest, test_CompactImplicant_UpperStrongerStrict) {
+    PtAsgn stronger = inequalityToSignedAtom(logic.mkNumLt(x, logic.getTerm_NumZero()));
+    PtAsgn weaker = inequalityToSignedAtom(logic.mkNumLeq(x, logic.getTerm_NumZero()));
+
+    Logic::implicant_t implicant {stronger, weaker};
+    LALogicUtils utils{logic};
+    auto compacted = utils.compactImplicant(implicant);
+    ASSERT_EQ(compacted.size(), 1);
+    EXPECT_NE(std::find(compacted.begin(), compacted.end(), stronger), compacted.end());
+    EXPECT_EQ(std::find(compacted.begin(), compacted.end(), weaker), compacted.end());
+}
+
+TEST_F(LAImplicantTest, test_CompactImplicant_UpperWeakerStrict) {
+    PtAsgn stronger = inequalityToSignedAtom(logic.mkNumLeq(x, logic.getTerm_NumZero()));
+    PtAsgn weaker = inequalityToSignedAtom(logic.mkNumLt(x, logic.getTerm_NumOne()));
+
+    Logic::implicant_t implicant {stronger, weaker};
+    LALogicUtils utils{logic};
+    auto compacted = utils.compactImplicant(implicant);
+    ASSERT_EQ(compacted.size(), 1);
+    EXPECT_NE(std::find(compacted.begin(), compacted.end(), stronger), compacted.end());
+    EXPECT_EQ(std::find(compacted.begin(), compacted.end(), weaker), compacted.end());
+}
+
+TEST_F(LAImplicantTest, test_CompactImplicant_UpperBothStrict) {
+    PtAsgn stronger = inequalityToSignedAtom(logic.mkNumLt(x, logic.getTerm_NumZero()));
+    PtAsgn weaker = inequalityToSignedAtom(logic.mkNumLt(x, logic.getTerm_NumOne()));
+
+    Logic::implicant_t implicant {stronger, weaker};
+    LALogicUtils utils{logic};
+    auto compacted = utils.compactImplicant(implicant);
+    ASSERT_EQ(compacted.size(), 1);
+    EXPECT_NE(std::find(compacted.begin(), compacted.end(), stronger), compacted.end());
+    EXPECT_EQ(std::find(compacted.begin(), compacted.end(), weaker), compacted.end());
+}
+
+TEST_F(LAImplicantTest, test_CompactImplicant_LowerBothNonStrict) {
+    PtAsgn weaker = inequalityToSignedAtom(logic.mkNumGeq(x, logic.getTerm_NumZero()));
+    PtAsgn stronger = inequalityToSignedAtom(logic.mkNumGeq(x, logic.getTerm_NumOne()));
+
+    Logic::implicant_t implicant {stronger, weaker};
+    LALogicUtils utils{logic};
+    auto compacted = utils.compactImplicant(implicant);
+    ASSERT_EQ(compacted.size(), 1);
+    EXPECT_NE(std::find(compacted.begin(), compacted.end(), stronger), compacted.end());
+    EXPECT_EQ(std::find(compacted.begin(), compacted.end(), weaker), compacted.end());
+}
+
+TEST_F(LAImplicantTest, test_CompactImplicant_LowerStrongerStrict) {
+    PtAsgn weaker = inequalityToSignedAtom(logic.mkNumGeq(x, logic.getTerm_NumZero()));
+    PtAsgn stronger = inequalityToSignedAtom(logic.mkNumGt(x, logic.getTerm_NumZero()));
+
+    Logic::implicant_t implicant {stronger, weaker};
+    LALogicUtils utils{logic};
+    auto compacted = utils.compactImplicant(implicant);
+    ASSERT_EQ(compacted.size(), 1);
+    EXPECT_NE(std::find(compacted.begin(), compacted.end(), stronger), compacted.end());
+    EXPECT_EQ(std::find(compacted.begin(), compacted.end(), weaker), compacted.end());
+}
+
+TEST_F(LAImplicantTest, test_CompactImplicant_LowerWeakerStrict) {
+    PtAsgn weaker = inequalityToSignedAtom(logic.mkNumGt(x, logic.getTerm_NumZero()));
+    PtAsgn stronger = inequalityToSignedAtom(logic.mkNumGeq(x, logic.getTerm_NumOne()));
+
+    Logic::implicant_t implicant {stronger, weaker};
+    LALogicUtils utils{logic};
+    auto compacted = utils.compactImplicant(implicant);
+    ASSERT_EQ(compacted.size(), 1);
+    EXPECT_NE(std::find(compacted.begin(), compacted.end(), stronger), compacted.end());
+    EXPECT_EQ(std::find(compacted.begin(), compacted.end(), weaker), compacted.end());
+}
+
+TEST_F(LAImplicantTest, test_CompactImplicant_LowerBothStrict) {
+    PtAsgn weaker = inequalityToSignedAtom(logic.mkNumGt(x, logic.getTerm_NumZero()));
+    PtAsgn stronger = inequalityToSignedAtom(logic.mkNumGt(x, logic.getTerm_NumOne()));
+
+    Logic::implicant_t implicant {stronger, weaker};
+    LALogicUtils utils{logic};
+    auto compacted = utils.compactImplicant(implicant);
+    ASSERT_EQ(compacted.size(), 1);
+    EXPECT_NE(std::find(compacted.begin(), compacted.end(), stronger), compacted.end());
+    EXPECT_EQ(std::find(compacted.begin(), compacted.end(), weaker), compacted.end());
 }

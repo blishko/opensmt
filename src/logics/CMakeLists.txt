@@ -26,6 +26,7 @@ target_sources(logics
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/SubstLoopBreaker.h"
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/SubstLoopBreaker.cc"
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/TermVisitor.cc"
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/LogicUtils.cc"
 )
 
 install(FILES Theory.h Logic.h LALogic.h Tterm.h LRALogic.h LIALogic.h CUFLogic.h BVLogic.h
