@@ -1,4 +1,5 @@
 include(GoogleTest)
+add_subdirectory(golem)
 add_executable(LRATest)
 target_sources(LRATest 
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/test_Rationals.cpp"
