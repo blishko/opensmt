@@ -16,4 +16,9 @@ endif()
 target_link_libraries(OpenSMT-bin PUBLIC OpenSMT-static)
 
 
+add_executable(golem golem.cc)
+
+target_link_libraries(golem PUBLIC OpenSMT-static chc)
+set_target_properties(golem PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+
 install(TARGETS OpenSMT-bin RUNTIME DESTINATION bin)
