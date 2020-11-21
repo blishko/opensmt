@@ -81,6 +81,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/proof
     ${CMAKE_SOURCE_DIR}/models
     ${CMAKE_SOURCE_DIR}/itehandler
+    ${CMAKE_SOURCE_DIR}/chc
 )
 
 #######################################################################################################
