@@ -189,10 +189,7 @@ public:
         it->second = label;
 
     }
-
-
 };
-
 
 
 class ImplicationChecker {
@@ -214,7 +211,9 @@ public:
         }
         SMTConfig config;
         MainSolver solver(logic, config, "implication_checker");
-        solver.insertFormula(logic.mkNot(logic.mkImpl(antecedent, consequent)));
+        PTRef negImpl = logic.mkAnd(antecedent, logic.mkNot(consequent)); // not(A->B) iff A and (not B)
+//        std::cout << logic.printTerm(negImpl) << std::endl;
+        solver.insertFormula(negImpl);
         auto res = solver.check();
         if (res == s_True) {
             cache.insert({pair, QueryResult::INVALID});
@@ -275,7 +274,13 @@ class LawiContext{
     }
 
     void expand(VId vertex);
-    VerificationResult refine(VId vertex);
+
+    struct RefinementResult {
+        VerificationResult verificationResult;
+        std::vector<VId> refinedVertices;
+    };
+
+    RefinementResult refine(VId vertex);
     void cover(VId v, VId w);
 
     void close(VId vertex);
@@ -299,7 +304,7 @@ class LawiContext{
 
     vec<PTRef> normalizeInterpolants(vec<PTRef> const & itps) const;
 
-    void strengthenLabelsAlongPath(const ArtPath & path, vec<PTRef> const & itps);
+    std::vector<VId> strengthenLabelsAlongPath(const ArtPath & path, vec<PTRef> const & itps);
 
     bool useForcedCovering() const { return usingForcedCovering; }
 
@@ -390,8 +395,10 @@ VerificationResult LawiContext::DFS(VId vertex) {
     // if it is an error location, we need to check the path
     if (art.isErrorLocation(vertex)) {
         auto res = refine(vertex);
-        if (res == VerificationResult::UNSAFE) { return VerificationResult::UNSAFE; }
-        closeAllAncestors(vertex);
+        if (res.verificationResult == VerificationResult::UNSAFE) { return VerificationResult::UNSAFE; }
+        for (VId strengthened : res.refinedVertices) {
+            close(strengthened);
+        }
     }
     else {
         expand(vertex);
@@ -463,7 +470,7 @@ void LawiContext::expand(VId vertex) {
     removeLeaf(vertex);
 }
 
-VerificationResult LawiContext::refine(VId errVertex) {
+LawiContext::RefinementResult LawiContext::refine(VId errVertex) {
     assert(art.isErrorLocation(errVertex));
     ArtPath path = art.getPathFromInit(errVertex, logic);
     auto edgeFormulas = path.getEdgeFormulas();
@@ -486,7 +493,7 @@ VerificationResult LawiContext::refine(VId errVertex) {
     if (res == s_True) {
         auto errorPath = buildGraphPathFromTreePath(path);
         invalidityWitness.setErrorPath(std::move(errorPath));
-        return VerificationResult::UNSAFE;
+        return RefinementResult{VerificationResult::UNSAFE, {}};
     } else if (res == s_False) {
 		auto edges = path.getEdges();
 		assert(not edges.empty() and art.getSource(edges.front()) == this->art.getRoot()
@@ -494,12 +501,12 @@ VerificationResult LawiContext::refine(VId errVertex) {
         // Interpolation
         vec<PTRef> pathInterpolants = getPathInterpolants(solver, path);
         vec<PTRef> normalizedInterpolants = normalizeInterpolants(pathInterpolants);
-        strengthenLabelsAlongPath(path, normalizedInterpolants);
+        auto strengthened = strengthenLabelsAlongPath(path, normalizedInterpolants);
         // don't forget to set the label of error location to false
         labels.replaceLabel(art.getTarget(edges.back()), logic.getTerm_false());
         // this vertex does not have to be considered anymore
         removeLeaf(errVertex);
-        return VerificationResult::UNKNOWN;
+        return RefinementResult{VerificationResult::UNKNOWN, std::move(strengthened)};
     } else {
         throw std::logic_error("Error in the SMT solver");
     }
@@ -744,9 +751,10 @@ vec<PTRef> LawiContext::normalizeInterpolants(const vec<PTRef> & itps) const {
     return normalized;
 }
 
-void LawiContext::strengthenLabelsAlongPath(const ArtPath & path, const vec<PTRef> & itps) {
+std::vector<VId> LawiContext::strengthenLabelsAlongPath(const ArtPath & path, const vec<PTRef> & itps) {
     auto vertices = art.getPathVertices(path);
     assert(vertices.size() == itps.size() + 2);
+    std::vector<VId> refinedVertices;
     for (int i = 0; i < itps.size(); ++i) {
         VId vertex = vertices[i + 1];
         PTRef itp = itps[i];
@@ -754,12 +762,14 @@ void LawiContext::strengthenLabelsAlongPath(const ArtPath & path, const vec<PTRe
 //        std::cout << "Old label of " << vertex.id << " is " << logic.printTerm(currentLabel) << std::endl;
         auto implCheckRes = checkImplication(currentLabel, itp);
         if (implCheckRes != decltype(implCheckRes)::VALID) {
+            refinedVertices.push_back(vertex);
             labels.replaceLabel(vertex, logic.mkAnd(itp, currentLabel));
             // label of 'vertex' has been strengthened, it might not cover other vertices anymore
             coveringRelation.vertexStrengthened(vertex);
         }
 //        std::cout << "New label of " << vertex.id << " is " << logic.printTerm(labels.getLabel(vertex)) << std::endl;
     }
+    return refinedVertices;
 }
 
 InvalidityWitness::ErrorPath LawiContext::buildGraphPathFromTreePath(const ArtPath & path) const {
