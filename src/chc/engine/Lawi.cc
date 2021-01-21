@@ -232,6 +232,51 @@ public:
         assert(false);
         throw std::logic_error("Unreachable code!");
     }
+
+    QueryResult checkImplicationWithHints(PTRef antecedent, PTRef consequent, std::vector<std::unique_ptr<Model>>& antecedentModels) {
+        if (antecedent == consequent || antecedent == logic.getTerm_false() || consequent == logic.getTerm_true()) {
+            return QueryResult::VALID;
+        }
+        if (antecedent == logic.getTerm_true() || consequent == logic.getTerm_false()) {
+            return QueryResult::INVALID;
+        }
+        auto pair = std::make_pair(antecedent, consequent);
+        auto it = cache.find(pair);
+        if (it != cache.end()) {
+            return it->second;
+        }
+        for (auto const& model : antecedentModels) {
+            assert(model->evaluate(antecedent) == logic.getTerm_true());
+            if (model->evaluate(consequent) == logic.getTerm_false()) {
+                cache.insert({pair, QueryResult::INVALID});
+                return QueryResult::INVALID;
+            }
+        }
+        SMTConfig config;
+        MainSolver solver(logic, config, "implication_checker");
+        PTRef negImpl = logic.mkAnd(antecedent, logic.mkNot(consequent)); // not(A->B) iff A and (not B)
+//        std::cout << logic.printTerm(negImpl) << std::endl;
+        solver.insertFormula(negImpl);
+        auto res = solver.check();
+        if (res == s_True) {
+            cache.insert({pair, QueryResult::INVALID});
+            antecedentModels.push_back(solver.getModel());
+            return QueryResult::INVALID;
+        }
+        if (res == s_False) {
+            cache.insert({pair, QueryResult::VALID});
+            return QueryResult::VALID;
+        }
+        if (res == s_Undef) {
+            return QueryResult::UNKNOWN;
+        }
+        if (res == s_Error) {
+            return QueryResult::ERROR;
+        }
+        assert(false);
+        throw std::logic_error("Unreachable code!");
+    }
+
 private:
     Logic & logic;
     std::unordered_map<std::pair<PTRef, PTRef>, QueryResult, PTRefPairHash> cache;
@@ -273,6 +318,10 @@ class LawiContext{
         return implicationChecker.checkImplication(antecedent, consequent);
     }
 
+    ImplicationCheckResult checkImplicationWithHints(PTRef antecedent, PTRef consequent, std::vector<std::unique_ptr<Model>>& antecedentModels) {
+        return implicationChecker.checkImplicationWithHints(antecedent, consequent, antecedentModels);
+    }
+
     void expand(VId vertex);
 
     struct RefinementResult {
@@ -282,6 +331,8 @@ class LawiContext{
 
     RefinementResult refine(VId vertex);
     void cover(VId v, VId w);
+
+    bool coverWithHints(VId v, VId w, std::vector<std::unique_ptr<Model>>& vModels);
 
     void close(VId vertex);
 
@@ -330,9 +381,11 @@ public:
 
 void LawiContext::close(VId vertex) {
     auto before = getEarlierForSameLocationAs(vertex);
+    std::vector<std::unique_ptr<Model>> vertexModels;
     for (VId earlier : before) {
         if (not coveringRelation.isCovered(earlier)) {
-            cover(vertex, earlier);
+            bool covered = coverWithHints(vertex, earlier, vertexModels);
+            if (covered) { return; }
         }
     }
 }
@@ -537,6 +590,17 @@ void LawiContext::cover(VId coveree, VId coverer) {
         coveringRelation.updateWith({.coveree = coveree, .coverer = coverer});
         // if coveree was covering something, this must be removed
     }
+}
+
+bool LawiContext::coverWithHints(VId coveree, VId coverer, std::vector<std::unique_ptr<Model>>& covereeModels) {
+    if (coveringRelation.isCovered(coveree)) { return true; }
+    if (not art.sameLocation(coveree, coverer) || art.isAncestor(coveree, coverer)) { return false; }
+    auto res = checkImplicationWithHints(labels.getLabel(coveree), labels.getLabel(coverer), covereeModels);
+    if (res == decltype(res)::VALID) {
+        coveringRelation.updateWith({.coveree = coveree, .coverer = coverer});
+        return true;
+    }
+    return false;
 }
 
 void CoveringRelation::updateWith(CoveringRelation::RelElement nElem) {
