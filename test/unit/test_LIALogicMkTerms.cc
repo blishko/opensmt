@@ -40,3 +40,12 @@ TEST_F(LIALogicMkTermsTest, testDeepLessThan) {
 //    LessThan_PTRef lt_shallow;
 //    ASSERT_NE(lt_shallow(prod1, prod2), lt_shallow(x, y));
 }
+
+TEST_F(LIALogicMkTermsTest, testDivMod) {
+    PTRef x = logic.mkNumVar("x");
+    PTRef two = logic.mkConst(2);
+    PTRef div = logic.mkNumDiv({x,two});
+    PTRef mod = logic.mkIntMod(x,two);
+    EXPECT_EQ(logic.getSymRef(div), logic.get_sym_Num_DIV());
+    EXPECT_EQ(logic.getSymRef(mod), logic.get_sym_Int_MOD());
+}

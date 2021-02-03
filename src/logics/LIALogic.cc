@@ -216,13 +216,15 @@ PTRef LIALogic::insertTerm(SymRef sym, vec<PTRef> &terms) {
 PTRef LIALogic::mkNumDiv(const vec<PTRef> &args) {
     if (args.size() != 2) { throw OsmtApiException("Incorrect number of arguments to DIV function"); }
     PTRef divisor = args[1];
-    if (not isNumConst(divisor)) { throw OsmtApiException("Divisor must be constant in linear logic"); }
+    if (not isConstant(divisor)) {
+        throw LANonLinearException("Only division by constant is permitted in linear arithmetic!");
+    }
     return insertTermHash(sym_Int_DIV, args);
 }
 
 const PTRef LIALogic::mkIntMod(PTRef dividend, PTRef divisor) {
     if (not isNumConst(divisor)) { throw OsmtApiException("Divisor must be constant in linear logic"); }
-    return insertTermHash(sym_Int_DIV, {dividend, divisor});
+    return insertTermHash(sym_Int_MOD, {dividend, divisor});
 }
 
 const PTRef LIALogic::mkIntAbs(PTRef arg) {
