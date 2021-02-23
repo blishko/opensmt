@@ -61,7 +61,7 @@ PTRef TransitionSystemHelper::getFutureStateFormula(PTRef fla, std::size_t k) {
     std::vector<PTRef> const& stateVars = systemType.getStateVars();
     auto const & frameVars = frames[k].frameVars;
     assert(stateVars.size() == frameVars.size());
-    Map<PTRef, PtAsgn, PTRefHash> substMap;
+    MapWithKeys<PTRef, PtAsgn, PTRefHash> substMap;
     for (std::size_t i = 0; i < stateVars.size(); ++i) {
         substMap.insert(stateVars[i], PtAsgn(frameVars[i], l_True));
     }
@@ -75,7 +75,7 @@ PTRef TransitionSystemHelper::getFutureTransitionFormula(PTRef fla, std::size_t 
     auto const & nextStateVars = systemType.getNextStateVars();
     auto const & frameVars = frames[k].frameVars;
     assert(stateVars.size() == frameVars.size());
-    Map<PTRef, PtAsgn, PTRefHash> substMap;
+    MapWithKeys<PTRef, PtAsgn, PTRefHash> substMap;
     for (std::size_t i = 0; i < stateVars.size(); ++i) {
         substMap.insert(stateVars[i], PtAsgn(frameVars[i], l_True));
     }

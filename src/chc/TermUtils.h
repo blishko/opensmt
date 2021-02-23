@@ -23,11 +23,11 @@ public:
     }
 
     vec<PTRef> getVars(PTRef term) const {
-        Map<PTRef,bool,PTRefHash> vars;
+        MapWithKeys<PTRef,bool,PTRefHash> vars;
         ::getVars(term, logic, vars);
-        vec<PTRef> vars_vec;
-        vars.getKeys(vars_vec);
-        return vars_vec;
+        vec<PTRef> keys;
+        vars.getKeys().copyTo(keys);
+        return keys;
     }
 
     vec<PTRef> getVarsFromPredicateInOrder(PTRef predicate) const {
@@ -45,7 +45,7 @@ public:
     }
 
     PTRef varSubstitute(PTRef term, substitutions_map const & subMap) const {
-        Map<PTRef, PtAsgn, PTRefHash> map;
+        MapWithKeys<PTRef, PtAsgn, PTRefHash> map;
         for (auto const & entry : subMap) {
             map.insert(entry.first, PtAsgn(entry.second, l_True));
         }

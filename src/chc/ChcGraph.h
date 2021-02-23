@@ -70,6 +70,7 @@ public:
     std::vector<VId> reversePostOrder() const;
 };
 
+class ChcDirectedHyperGraph;
 
 class ChcDirectedGraph {
 
@@ -147,6 +148,8 @@ public:
 	VId getTarget(EId eid) const {
 		return getEdge(eid).to;
 	}
+
+    std::unique_ptr<ChcDirectedHyperGraph> toHyperGraph() const;
 };
 
 
