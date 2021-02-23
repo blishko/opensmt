@@ -105,6 +105,8 @@ public:
 
     std::vector<Vertex> getVertexCopies() const { return vertices; }
 
+    std::vector<DirectedEdge> getEdgeCopies() const { return edges; }
+
     std::vector<VId> getVertices() const {
         std::vector<VId> res;
         std::size_t counter = 0;
@@ -118,11 +120,15 @@ public:
         std::generate_n(std::back_inserter(res), edges.size(), [&counter]() { return EId{counter++}; });
         return res;
     }
-	std::vector<DirectedEdge> getEdgeCopies() const { return edges; }
+
     Vertex const & getVertex(VId vid) const { return vertices[vid.id]; }
+
     PTRef getStateVersion(VId vid) const { return predicates.getStateRepresentation(getVertex(vid).predicateSymbol); }
+
     PTRef getNextStateVersion(VId vid) const { return predicates.getNextStateRepresentation(getVertex(vid).predicateSymbol); }
+
     VId getEntryId() const { return entry; }
+
     VId getExitId() const { return exit; }
 
     DirectedEdge getEdge(EId eid) const {
@@ -161,6 +167,49 @@ public:
     bool isNormalGraph() const;
     std::unique_ptr<ChcDirectedGraph> toNormalGraph() const;
 
+    std::vector<Vertex> getVertexCopies() const { return vertices; }
+
+    std::vector<DirectedHyperEdge> getEdgeCopies() const { return edges; }
+
+    std::vector<VId> getVertices() const {
+        std::vector<VId> res;
+        std::size_t counter = 0;
+        std::generate_n(std::back_inserter(res), vertices.size(), [&counter]() { return VId{counter++}; });
+        return res;
+    }
+
+    std::vector<EId> getEdges() const {
+        std::vector<EId> res;
+        std::size_t counter = 0;
+        std::generate_n(std::back_inserter(res), edges.size(), [&counter]() { return EId{counter++}; });
+        return res;
+    }
+    Vertex const & getVertex(VId vid) const { return vertices[vid.id]; }
+
+    PTRef getStateVersion(VId vid) const { return predicates.getStateRepresentation(getVertex(vid).predicateSymbol); }
+
+    PTRef getNextStateVersion(VId vid) const { return predicates.getNextStateRepresentation(getVertex(vid).predicateSymbol); }
+
+    VId getEntryId() const { return entry; }
+
+    VId getExitId() const { return exit; }
+
+    DirectedHyperEdge getEdge(EId eid) const {
+        assert(eid.id < edges.size());
+        return edges[eid.id];
+    }
+
+    PTRef getEdgeLabel(EId eid) const {
+        return getEdge(eid).fla.fla;
+    }
+
+    std::vector<VId> getSources(EId eid) const {
+        return getEdge(eid).from;
+    }
+
+    VId getTarget(EId eid) const {
+        return getEdge(eid).to;
+    }
 };
 
 class ChcGraphBuilder {
