@@ -345,7 +345,7 @@ class LawiContext{
         const char* msg = "ok";
         bool set = config->setOption(SMTConfig::o_produce_inter, SMTOption(true), msg);
         assert(set); (void)set;
-        config->simplify_interpolant = 4;
+        config->setSimplifyInterpolant(4);
         if (options.hasOption(Options::LRA_ITP_ALG)) {
             int algNumber = std::atoi(options.getOption(Options::LRA_ITP_ALG).c_str());
             config->setLRAInterpolationAlgorithm(ItpAlgorithm{algNumber});

@@ -6,6 +6,7 @@ target_sources(chc
     PRIVATE ChcGraph.cc
     PRIVATE engine/Bmc.cc
     PRIVATE engine/Lawi.cc
+    PRIVATE engine/Spacer.cc
     PRIVATE engine/LoopAccelerator.cc
     PRIVATE engine/ReverseWrapper.cc
     PRIVATE TransitionSystem.cc
@@ -14,4 +15,5 @@ target_sources(chc
     PRIVATE Validator.cc
     PRIVATE Normalizer.cc
     PRIVATE Witnesses.cc
+    PRIVATE ModelBasedProjection.cc
     )
