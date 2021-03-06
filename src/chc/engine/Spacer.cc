@@ -7,7 +7,8 @@
 
 class ApproxMap {
 public:
-    PTRef get(VId vid, std::size_t bound);
+    PTRef getWhole(VId vid, std::size_t bound);
+    std::vector<PTRef> getComponents(VId vid, std::size_t bound);
     void insert(VId vid, std::size_t bound, PTRef summary);
 };
 
@@ -23,12 +24,13 @@ class OverApproxMap : public ApproxMap {
 class SpacerContext {
     Logic & logic;
     ChcDirectedHyperGraph const & graph;
-    std::size_t currentBound = 0;
 
     UnderApproxMap under;
     OverApproxMap over;
 
-    bool boundSafety();
+    bool boundSafety(std::size_t currentBound);
+
+    bool isInductive(std::size_t currentBound);
 
     enum class QueryAnswer {VALID, INVALID, ERROR, UNKNOWN};
     struct QueryResult {
@@ -75,7 +77,7 @@ GraphVerificationResult Spacer::solve(const ChcDirectedGraph & system) {
 }
 
 GraphVerificationResult SpacerContext::run() {
-    auto res = boundSafety();
+    auto res = boundSafety(0);
     throw "Not implemented";
 }
 
@@ -100,7 +102,7 @@ std::vector<EId> incomingEdges(VId v, ChcDirectedHyperGraph const & graph) {
     return res;
 }
 
-bool SpacerContext::boundSafety() {
+bool SpacerContext::boundSafety(std::size_t currentBound) {
     VId query = graph.getExitId();
     PriorityQueue pqueue;
     pqueue.push(ProofObligation{query, currentBound, logic.getTerm_true()});
@@ -140,10 +142,10 @@ bool SpacerContext::boundSafety() {
             while(true) {
                 vec<PTRef> components;
                 for (std::size_t i = 0; i <= vertexToRefine; ++i) {
-                    components.push(over.get(targets[i], bound));
+                    components.push(over.getWhole(targets[i], bound));
                 }
                 for (std::size_t i = vertexToRefine + 1; i < targets.size(); ++i) {
-                    components.push(under.get(targets[i], bound));
+                    components.push(under.getWhole(targets[i], bound));
                 }
                 components.push(edge.fla.fla);
                 PTRef body = logic.mkAnd(components);
@@ -176,14 +178,16 @@ bool SpacerContext::boundSafety() {
                     vec<PTRef> sourceFlas;
                     auto sources = graph.getSources(eid);
                     for (VId source : sources) {
-                        sourceFlas.push(over.get(source, pob.bound - 1));
+                        sourceFlas.push(over.getWhole(source, pob.bound - 1));
                     }
                     sourceFlas.push(graph.getEdgeLabel(eid));
                     edgeRepresentations.push(logic.mkAnd(sourceFlas));
                 }
                 auto res = interpolatingImplies(logic.mkOr(edgeRepresentations), logic.mkNot(pob.constraint));
                 assert(res.answer == QueryAnswer::VALID);
-                if (res.answer != QueryAnswer::VALID) { throw std::logic_error("All edges should have been blocked, but they are not!")};
+                if (res.answer != QueryAnswer::VALID) {
+                    throw std::logic_error("All edges should have been blocked, but they are not!");
+                }
                 over.insert(pob.vertex, pob.bound, res.interpolant);
                 pqueue.pop(); // This POB has been successfully blocked
             } else {
@@ -265,7 +269,7 @@ SpacerContext::MustReachResult SpacerContext::mustReachable(EId eid, PTRef targe
     PTRef edgeLabel = edge.fla.fla;
     vec<PTRef> bodyComponents{edgeLabel};
     for (VId source : edge.from) {
-        PTRef mustSummary = under.get(source, bound);
+        PTRef mustSummary = under.getWhole(source, bound);
         bodyComponents.push(mustSummary);
     }
     PTRef body = logic.mkAnd(bodyComponents);
@@ -290,8 +294,8 @@ SpacerContext::MayReachResult SpacerContext::mayReachable(EId eid, PTRef targetC
     PTRef edgeLabel = edge.fla.fla;
     vec<PTRef> bodyComponents{edgeLabel};
     for (VId source : edge.from) {
-        PTRef mustSummary = over.get(source, bound);
-        bodyComponents.push(mustSummary);
+        PTRef maySummary = over.getWhole(source, bound);
+        bodyComponents.push(maySummary);
     }
     PTRef body = logic.mkAnd(bodyComponents);
     auto implCheckRes = interpolatingImplies(body, logic.mkNot(targetConstraint));
@@ -304,4 +308,33 @@ SpacerContext::MayReachResult SpacerContext::mayReachable(EId eid, PTRef targetC
         res.maySummary = PTRef_Undef;
     }
     return res;
+}
+
+// *********** INDUCTIVE CHECK *****************************
+bool SpacerContext::isInductive(std::size_t level) {
+    bool inductive = true;
+    for (VId vid : graph.getVertices()) {
+        auto maySummaryComponents = over.getComponents(vid, level);
+        // encode body as disjunction over all the incoming edges
+        vec<PTRef> edgeRepresentations;
+        for (EId eid : incomingEdges(vid, graph)) {
+            vec<PTRef> edgeBodyArgs;
+            for (VId source : graph.getSources(eid)) {
+                edgeBodyArgs.push(over.getWhole(source, level));
+            }
+            edgeBodyArgs.push(graph.getEdgeLabel(eid));
+            edgeRepresentations.push(logic.mkAnd(edgeBodyArgs));
+        }
+        PTRef body = logic.mkOr(edgeRepresentations);
+        // Figure out which components of the may summary are implied by body at level n and so can be pushed to level n+1
+        for (PTRef component : maySummaryComponents) {
+            auto res = implies(body, component);
+            if (res.answer == QueryAnswer::VALID) {
+                over.insert(vid, level + 1, component);
+            } else {
+                inductive = false;
+            }
+        }
+    }
+    return inductive;
 }
