@@ -15,4 +15,5 @@ target_sources(chc
     PRIVATE Validator.cc
     PRIVATE Normalizer.cc
     PRIVATE Witnesses.cc
+    PRIVATE ModelBasedProjection.cc
     )
