@@ -4,6 +4,7 @@
 
 #include <engine/Bmc.h>
 #include <engine/Lawi.h>
+#include <engine/Spacer.h>
 #include <engine/ReverseWrapper.h>
 #include <engine/LoopAccelerator.h>
 #include "ChcInterpreter.h"
@@ -443,6 +444,8 @@ std::unique_ptr<Engine> ChcInterpreterContext::getEngine() const {
         return std::unique_ptr<Engine>(new BMC(logic, opts));
     } else if (engineStr == "lawi") {
         return std::unique_ptr<Engine>(new Lawi(logic, opts));
+    } else if (engineStr == "spacer") {
+        return std::unique_ptr<Engine>(new Spacer(logic, opts));
     } else {
         throw std::invalid_argument("Unknown engine specified");
     }
