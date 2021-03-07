@@ -54,9 +54,12 @@ class SpacerContext {
         return logic.mkAnd(over.getComponents(vid, bound));
     }
 
-    bool boundSafety(std::size_t currentBound);
+    enum class BoundedSafetyResult { SAFE, UNSAFE, INCREASE_BOUND };
+
+    BoundedSafetyResult boundSafety(std::size_t currentBound);
 
     bool isInductive(std::size_t currentBound);
+
 
     enum class QueryAnswer {VALID, INVALID, ERROR, UNKNOWN};
     struct QueryResult {
@@ -103,18 +106,24 @@ GraphVerificationResult Spacer::solve(const ChcDirectedGraph & system) {
 }
 
 GraphVerificationResult SpacerContext::run() {
-    std::size_t currentBound = 0;
+    std::size_t currentBound = 1;
     while(true) {
-        auto isBoundSafe = boundSafety(currentBound);
-        if (not isBoundSafe) {
-            // query is reachable
-            return GraphVerificationResult(VerificationResult::UNSAFE);
+        auto boundedResult = boundSafety(currentBound);
+        switch (boundedResult) {
+            case BoundedSafetyResult::INCREASE_BOUND:
+                ++currentBound;
+                break;
+            case BoundedSafetyResult::UNSAFE:
+                return GraphVerificationResult(VerificationResult::UNSAFE);
+            case BoundedSafetyResult::SAFE: {
+                auto inductive = isInductive(currentBound);
+                if (inductive) {
+                    return GraphVerificationResult(VerificationResult::SAFE);
+                }
+                ++currentBound;
+                break;
+            }
         }
-        auto inductive = isInductive(currentBound);
-        if (inductive) {
-            return GraphVerificationResult(VerificationResult::SAFE);
-        }
-        ++currentBound;
     }
 }
 
@@ -146,24 +155,31 @@ std::vector<EId> incomingEdges(VId v, ChcDirectedHyperGraph const & graph) {
     return res;
 }
 
-bool SpacerContext::boundSafety(std::size_t currentBound) {
+SpacerContext::BoundedSafetyResult SpacerContext::boundSafety(std::size_t currentBound) {
     VId query = graph.getExitId();
     PriorityQueue pqueue;
     pqueue.push(ProofObligation{query, currentBound, logic.getTerm_true()});
     while(not pqueue.empty()) {
         auto const & pob = pqueue.peek();
+        if (pob.bound == 0 and pob.vertex != graph.getEntryId()) {
+            return BoundedSafetyResult::INCREASE_BOUND; // There is a potentially reachable bad state, but we have reached limit -> try again with higher limit
+        }
+        if (pob.vertex == graph.getEntryId()) {
+            return BoundedSafetyResult::UNSAFE;
+        }
         auto edges = incomingEdges(pob.vertex, graph);
         bool mustReached = false;
         std::vector<ProofObligation> newProofObligations;
         for (EId edgeId : edges) {
             auto edge = graph.getEdge(edgeId);
             // test if vertex can be reached using must summaries
+            assert(pob.bound > 0);
             auto result = mustReachable(edgeId, pob.constraint, pob.bound - 1);
             if (result.applied) {
                 assert(result.mustSummary != PTRef_Undef);
                 under.insert(pob.vertex, pob.bound, result.mustSummary);
                 if (pob.vertex == query) {
-                    return false; // query is reachable
+                    return BoundedSafetyResult::UNSAFE; // query is reachable
                 }
                 pqueue.pop();
                 mustReached = true;
@@ -241,7 +257,7 @@ bool SpacerContext::boundSafety(std::size_t currentBound) {
             }
         }
     } // end of main cycle
-    return true; // SAFE (not reachable) at this bound
+    return BoundedSafetyResult::SAFE; // not reachable at this bound
 }
 
 SpacerContext::QueryResult SpacerContext::implies(PTRef antecedent, PTRef consequent) {
