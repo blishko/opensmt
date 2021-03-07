@@ -7,9 +7,26 @@
 
 class ApproxMap {
 public:
-    PTRef getWhole(VId vid, std::size_t bound);
-    std::vector<PTRef> getComponents(VId vid, std::size_t bound);
-    void insert(VId vid, std::size_t bound, PTRef summary);
+    std::vector<PTRef> getComponents(VId vid, std::size_t bound) {
+        ensureBound(bound);
+        auto const& boundMap = innerMap[bound];
+        auto it = boundMap.find(vid);
+        return it == boundMap.end() ? std::vector<PTRef>{} : it->second;
+    }
+
+    void insert(VId vid, std::size_t bound, PTRef summary) {
+        ensureBound(bound);
+        auto & boundMap = innerMap[bound];
+        boundMap[vid].push_back(summary);
+    }
+private:
+    std::vector<std::map<VId, std::vector<PTRef>>> innerMap; // bound -> vertex -> conjuncts of approximation
+
+    void ensureBound(std::size_t bound) {
+        while (innerMap.size() <= bound) {
+            innerMap.emplace_back();
+        }
+    }
 };
 
 class UnderApproxMap : public ApproxMap {
@@ -27,6 +44,14 @@ class SpacerContext {
 
     UnderApproxMap under;
     OverApproxMap over;
+
+    PTRef getMustSummary(VId vid, std::size_t bound) {
+        return logic.mkOr(under.getComponents(vid, bound));
+    }
+
+    PTRef getMaySummary(VId vid, std::size_t bound) {
+        return logic.mkAnd(over.getComponents(vid, bound));
+    }
 
     bool boundSafety(std::size_t currentBound);
 
@@ -142,10 +167,10 @@ bool SpacerContext::boundSafety(std::size_t currentBound) {
             while(true) {
                 vec<PTRef> components;
                 for (std::size_t i = 0; i <= vertexToRefine; ++i) {
-                    components.push(over.getWhole(targets[i], bound));
+                    components.push(getMaySummary(targets[i], bound));
                 }
                 for (std::size_t i = vertexToRefine + 1; i < targets.size(); ++i) {
-                    components.push(under.getWhole(targets[i], bound));
+                    components.push(getMustSummary(targets[i], bound));
                 }
                 components.push(edge.fla.fla);
                 PTRef body = logic.mkAnd(components);
@@ -178,7 +203,7 @@ bool SpacerContext::boundSafety(std::size_t currentBound) {
                     vec<PTRef> sourceFlas;
                     auto sources = graph.getSources(eid);
                     for (VId source : sources) {
-                        sourceFlas.push(over.getWhole(source, pob.bound - 1));
+                        sourceFlas.push(getMaySummary(source, pob.bound - 1));
                     }
                     sourceFlas.push(graph.getEdgeLabel(eid));
                     edgeRepresentations.push(logic.mkAnd(sourceFlas));
@@ -269,7 +294,7 @@ SpacerContext::MustReachResult SpacerContext::mustReachable(EId eid, PTRef targe
     PTRef edgeLabel = edge.fla.fla;
     vec<PTRef> bodyComponents{edgeLabel};
     for (VId source : edge.from) {
-        PTRef mustSummary = under.getWhole(source, bound);
+        PTRef mustSummary = getMustSummary(source, bound);
         bodyComponents.push(mustSummary);
     }
     PTRef body = logic.mkAnd(bodyComponents);
@@ -294,7 +319,7 @@ SpacerContext::MayReachResult SpacerContext::mayReachable(EId eid, PTRef targetC
     PTRef edgeLabel = edge.fla.fla;
     vec<PTRef> bodyComponents{edgeLabel};
     for (VId source : edge.from) {
-        PTRef maySummary = over.getWhole(source, bound);
+        PTRef maySummary = getMaySummary(source, bound);
         bodyComponents.push(maySummary);
     }
     PTRef body = logic.mkAnd(bodyComponents);
@@ -320,7 +345,7 @@ bool SpacerContext::isInductive(std::size_t level) {
         for (EId eid : incomingEdges(vid, graph)) {
             vec<PTRef> edgeBodyArgs;
             for (VId source : graph.getSources(eid)) {
-                edgeBodyArgs.push(over.getWhole(source, level));
+                edgeBodyArgs.push(getMaySummary(source, level));
             }
             edgeBodyArgs.push(graph.getEdgeLabel(eid));
             edgeRepresentations.push(logic.mkAnd(edgeBodyArgs));
