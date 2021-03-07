@@ -139,6 +139,11 @@ bool operator<(ProofObligation const& pob1, ProofObligation const& pob2) {
             (pob1.bound == pob2.bound and pob1.vertex.id < pob2.vertex.id);
 }
 
+bool operator>(ProofObligation const& pob1, ProofObligation const& pob2) {
+    return pob1.bound > pob2.bound or
+           (pob1.bound == pob2.bound and pob1.vertex.id > pob2.vertex.id);
+}
+
 struct PriorityQueue {
 
     void push(ProofObligation pob) { pqueue.push(pob); }
@@ -146,13 +151,13 @@ struct PriorityQueue {
     void pop() { pqueue.pop(); }
     bool empty() const { return pqueue.empty(); }
 private:
-    std::priority_queue<ProofObligation> pqueue;
+    std::priority_queue<ProofObligation, std::vector<ProofObligation>, std::greater<ProofObligation>> pqueue;
 };
 
 
 std::vector<EId> incomingEdges(VId v, ChcDirectedHyperGraph const & graph) {
     auto res = graph.getEdges();
-    res.erase(std::remove_if(res.begin(), res.end(), [&](EId e) { return graph.getEdge(e).to == v; }));
+    res.erase(std::remove_if(res.begin(), res.end(), [&](EId e) { return graph.getEdge(e).to != v; }), res.end());
     return res;
 }
 
@@ -215,8 +220,9 @@ SpacerContext::BoundedSafetyResult SpacerContext::boundSafety(std::size_t curren
                     // When this target is over-approximated and the edge becomes feasible -> extract next proof obligation
                     VId source = targets[vertexToRefine];
                     auto predicateVars = TermUtils(logic).getVars(graph.getStateVersion(source));
-                    auto newConstraint = projectFormula(logic.mkAnd(body, pob.constraint), predicateVars, res.model.get());
-                    newProofObligations.push_back(ProofObligation{targets[vertexToRefine], bound, newConstraint});
+                    PTRef newConstraint = projectFormula(logic.mkAnd(body, pob.constraint), predicateVars, res.model.get());
+                    PTRef newPob = TimeMachine(logic).sendFlaThroughTime(newConstraint, 1); // ensure POB is next-state fla
+                    newProofObligations.push_back(ProofObligation{targets[vertexToRefine], bound, newPob});
                     break;
                 }
                 if (res.answer == QueryAnswer::VALID) {
@@ -363,7 +369,7 @@ SpacerContext::MayReachResult SpacerContext::mayReachable(EId eid, PTRef targetC
     MayReachResult res;
     if (implCheckRes.answer == SpacerContext::QueryAnswer::VALID) {
         res.blocked = true;
-        res.maySummary = res.maySummary;
+        res.maySummary = implCheckRes.interpolant;
     } else {
         res.blocked = false;
         res.maySummary = PTRef_Undef;
@@ -405,6 +411,8 @@ PTRef SpacerContext::projectFormula(PTRef fla, const vec<PTRef> &toVars, Model *
         throw std::logic_error("Model not provided to MBP!");
     }
     assert(std::all_of(toVars.begin(), toVars.end(), [this](PTRef var) { return logic.isVar(var); }));
+//    std::cout << "Projecting " << logic.printTerm(fla) << " to variables ";
+//    std::for_each(toVars.begin(), toVars.end(), [&](PTRef var) { std::cout << logic.printTerm(var) << ' '; });
     auto varsInFla = TermUtils(logic).getVars(fla);
 
     vec<PTRef> toEliminate;
@@ -416,5 +424,6 @@ PTRef SpacerContext::projectFormula(PTRef fla, const vec<PTRef> &toVars, Model *
     }
     ModelBasedProjection mbp(logic);
     PTRef res = mbp.project(fla, toEliminate, *model);
+//    std::cout << "\nResult is " << logic.printTerm(res) << std::endl;
     return res;
 }
