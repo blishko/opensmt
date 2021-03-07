@@ -98,11 +98,12 @@ public:
 };
 
 GraphVerificationResult Spacer::solve(ChcDirectedHyperGraph & system) {
-    return Engine::solve(system);
+    return SpacerContext(logic, system).run();
 }
 
 GraphVerificationResult Spacer::solve(const ChcDirectedGraph & system) {
-    return Engine::solve(system);
+    auto hyperGraph = system.toHyperGraph();
+    return SpacerContext(logic, *hyperGraph).run();
 }
 
 GraphVerificationResult SpacerContext::run() {

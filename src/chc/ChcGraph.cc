@@ -155,3 +155,11 @@ std::vector<VId> AdjacencyListsGraphRepresentation::reversePostOrder() const {
     std::reverse(order.begin(), order.end());
     return order;
 }
+
+std::unique_ptr<ChcDirectedHyperGraph> ChcDirectedGraph::toHyperGraph() const {
+    std::vector<DirectedHyperEdge> hyperEdges;
+    std::transform(this->edges.begin(), this->edges.end(), std::back_inserter(hyperEdges), [](DirectedEdge const& edge) {
+        return DirectedHyperEdge{.from = {edge.from}, .to = edge.to, .fla = edge.fla};
+    });
+    return std::unique_ptr<ChcDirectedHyperGraph>( new ChcDirectedHyperGraph(vertices, std::move(hyperEdges), predicates, entry, exit));
+}
