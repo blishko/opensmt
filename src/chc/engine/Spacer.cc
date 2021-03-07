@@ -4,6 +4,7 @@
 
 #include "Spacer.h"
 #include "MainSolver.h"
+#include "ModelBasedProjection.h"
 
 class ApproxMap {
 public:
@@ -102,8 +103,19 @@ GraphVerificationResult Spacer::solve(const ChcDirectedGraph & system) {
 }
 
 GraphVerificationResult SpacerContext::run() {
-    auto res = boundSafety(0);
-    throw "Not implemented";
+    std::size_t currentBound = 0;
+    while(true) {
+        auto isBoundSafe = boundSafety(currentBound);
+        if (not isBoundSafe) {
+            // query is reachable
+            return GraphVerificationResult(VerificationResult::UNSAFE);
+        }
+        auto inductive = isInductive(currentBound);
+        if (inductive) {
+            return GraphVerificationResult(VerificationResult::SAFE);
+        }
+        ++currentBound;
+    }
 }
 
 struct ProofObligation {
@@ -112,12 +124,19 @@ struct ProofObligation {
     PTRef constraint;
 };
 
+bool operator<(ProofObligation const& pob1, ProofObligation const& pob2) {
+    return pob1.bound < pob2.bound or
+            (pob1.bound == pob2.bound and pob1.vertex.id < pob2.vertex.id);
+}
+
 struct PriorityQueue {
 
-    void push(ProofObligation pob);
-    ProofObligation const & peek();
-    void pop();
-    bool empty() const;
+    void push(ProofObligation pob) { pqueue.push(pob); }
+    ProofObligation const & peek() { return pqueue.top(); }
+    void pop() { pqueue.pop(); }
+    bool empty() const { return pqueue.empty(); }
+private:
+    std::priority_queue<ProofObligation> pqueue;
 };
 
 
@@ -362,4 +381,23 @@ bool SpacerContext::isInductive(std::size_t level) {
         }
     }
     return inductive;
+}
+
+PTRef SpacerContext::projectFormula(PTRef fla, const vec<PTRef> &toVars, Model *model) {
+    if (not model) {
+        throw std::logic_error("Model not provided to MBP!");
+    }
+    assert(std::all_of(toVars.begin(), toVars.end(), [this](PTRef var) { return logic.isVar(var); }));
+    auto varsInFla = TermUtils(logic).getVars(fla);
+
+    vec<PTRef> toEliminate;
+    for (PTRef var : varsInFla) {
+        auto it = std::find(toVars.begin(), toVars.end(), var);
+        if (it == toVars.end()) {
+            toEliminate.push(var);
+        }
+    }
+    ModelBasedProjection mbp(logic);
+    PTRef res = mbp.project(fla, toEliminate, *model);
+    return res;
 }
