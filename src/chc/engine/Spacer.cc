@@ -54,7 +54,7 @@ class SpacerContext {
         return logic.mkAnd(over.getComponents(vid, bound));
     }
 
-    enum class BoundedSafetyResult { SAFE, UNSAFE, INCREASE_BOUND };
+    enum class BoundedSafetyResult { SAFE, UNSAFE };
 
     BoundedSafetyResult boundSafety(std::size_t currentBound);
 
@@ -92,7 +92,13 @@ class SpacerContext {
 
 
 public:
-    SpacerContext(Logic & logic, ChcDirectedHyperGraph const & graph): logic(logic), graph(graph) {}
+    SpacerContext(Logic & logic, ChcDirectedHyperGraph const & graph): logic(logic), graph(graph) {
+        for (VId vid : graph.getVertices()) {
+            PTRef toInsert = vid == graph.getEntryId() ? logic.getTerm_true() : logic.getTerm_false();
+            over.insert(vid, 0, toInsert);
+            under.insert(vid, 0, toInsert);
+        }
+    }
 
     GraphVerificationResult run();
 };
@@ -111,9 +117,6 @@ GraphVerificationResult SpacerContext::run() {
     while(true) {
         auto boundedResult = boundSafety(currentBound);
         switch (boundedResult) {
-            case BoundedSafetyResult::INCREASE_BOUND:
-                ++currentBound;
-                break;
             case BoundedSafetyResult::UNSAFE:
                 return GraphVerificationResult(VerificationResult::UNSAFE);
             case BoundedSafetyResult::SAFE: {
@@ -124,6 +127,9 @@ GraphVerificationResult SpacerContext::run() {
                 ++currentBound;
                 break;
             }
+            default:
+                assert(false);
+                throw std::logic_error("Unreachable!");
         }
     }
 }
@@ -167,9 +173,6 @@ SpacerContext::BoundedSafetyResult SpacerContext::boundSafety(std::size_t curren
     pqueue.push(ProofObligation{query, currentBound, logic.getTerm_true()});
     while(not pqueue.empty()) {
         auto const & pob = pqueue.peek();
-        if (pob.bound == 0 and pob.vertex != graph.getEntryId()) {
-            return BoundedSafetyResult::INCREASE_BOUND; // There is a potentially reachable bad state, but we have reached limit -> try again with higher limit
-        }
         if (pob.vertex == graph.getEntryId()) {
             return BoundedSafetyResult::UNSAFE;
         }
@@ -255,7 +258,9 @@ SpacerContext::BoundedSafetyResult SpacerContext::boundSafety(std::size_t curren
                 if (res.answer != QueryAnswer::VALID) {
                     throw std::logic_error("All edges should have been blocked, but they are not!");
                 }
-                over.insert(pob.vertex, pob.bound, res.interpolant);
+                PTRef newLemma = TimeMachine(logic).sendFlaThroughTime(res.interpolant, -1);
+                std::cout << "Learnt new lemma for " << pob.vertex.id << " at level " << pob.bound << " - " << logic.printTerm(newLemma) << std::endl;
+                over.insert(pob.vertex, pob.bound, newLemma);
                 pqueue.pop(); // This POB has been successfully blocked
             } else {
                 for (auto const& npob : newProofObligations) {
@@ -411,8 +416,8 @@ PTRef SpacerContext::projectFormula(PTRef fla, const vec<PTRef> &toVars, Model *
         throw std::logic_error("Model not provided to MBP!");
     }
     assert(std::all_of(toVars.begin(), toVars.end(), [this](PTRef var) { return logic.isVar(var); }));
-//    std::cout << "Projecting " << logic.printTerm(fla) << " to variables ";
-//    std::for_each(toVars.begin(), toVars.end(), [&](PTRef var) { std::cout << logic.printTerm(var) << ' '; });
+    std::cout << "Projecting " << logic.printTerm(fla) << " to variables ";
+    std::for_each(toVars.begin(), toVars.end(), [&](PTRef var) { std::cout << logic.printTerm(var) << ' '; });
     auto varsInFla = TermUtils(logic).getVars(fla);
 
     vec<PTRef> toEliminate;
@@ -424,6 +429,6 @@ PTRef SpacerContext::projectFormula(PTRef fla, const vec<PTRef> &toVars, Model *
     }
     ModelBasedProjection mbp(logic);
     PTRef res = mbp.project(fla, toEliminate, *model);
-//    std::cout << "\nResult is " << logic.printTerm(res) << std::endl;
+    std::cout << "\nResult is " << logic.printTerm(res) << std::endl;
     return res;
 }
