@@ -33,11 +33,11 @@ bool LALogic::isNegated(PTRef tr) const {
 }
 
 bool LALogic::isLinearFactor(PTRef tr) const {
-    if (isNumConst(tr) || isNumVarOrIte(tr)) { return true; }
+    if (isNumConst(tr) || isNumVarLike(tr)) { return true; }
     if (isNumTimes(tr)) {
         Pterm const& term = getPterm(tr);
-        return term.size() == 2 && ((isNumConst(term[0]) && (isNumVarOrIte(term[1])))
-                                    || (isNumConst(term[1]) && (isNumVarOrIte(term[0]))));
+        return term.size() == 2 && ((isNumConst(term[0]) && (isNumVarLike(term[1])))
+                                    || (isNumConst(term[1]) && (isNumVarLike(term[0]))));
     }
     return false;
 }
@@ -64,7 +64,7 @@ LALogic::getNumConst(PTRef tr) const
 
 void LALogic::splitTermToVarAndConst(const PTRef& term, PTRef& var, PTRef& fac) const
 {
-    assert(isNumTimes(term) || isNumDiv(term) || isNumVarOrIte(term) || isConstant(term) || isUF(term));
+    assert(isNumTimes(term) || isNumDiv(term) || isNumVarLike(term) || isConstant(term));
     if (isNumTimes(term) || isNumDiv(term)) {
         assert(getPterm(term).size() == 2);
         fac = getPterm(term)[0];
@@ -75,8 +75,8 @@ void LALogic::splitTermToVarAndConst(const PTRef& term, PTRef& var, PTRef& fac) 
             fac = t;
         }
         assert(isConstant(fac));
-        assert(isNumVarOrIte(var) || isUF(var));
-    } else if (isNumVarOrIte(term) || isUF(term)) {
+        assert(isNumVarLike(var));
+    } else if (isNumVarLike(term)) {
         var = term;
         fac = getTerm_NumOne();
     } else {
@@ -213,12 +213,11 @@ bool LALogic::isBuiltinFunction(const SymRef sr) const
 }
 bool LALogic::isNumTerm(PTRef tr) const
 {
-    auto isNumVarOrUFOrIte = [this](PTRef tr) { return isNumVarOrIte(tr) || isUF(tr); };
-    const Pterm& t = getPterm(tr);
-    if (isNumVarOrIte(tr))
+    if (isNumVarLike(tr))
         return true;
+    const Pterm& t = getPterm(tr);
     if (t.size() == 2 && isNumTimes(tr))
-        return (isNumVarOrUFOrIte(t[0]) && isConstant(t[1])) || (isNumVarOrUFOrIte(t[1]) && isConstant(t[0]));
+        return (isNumVarLike(t[0]) && isConstant(t[1])) || (isNumVarLike(t[1]) && isConstant(t[0]));
     else if (t.size() == 0)
         return isNumVar(tr) || isConstant(tr);
     else
@@ -265,50 +264,6 @@ PTRef  LALogic::mkConst(const opensmt::Number& c)
     markConstant(id);
     return ptr;
 }
-
-SRef   LALogic::getSort_num () const { return get_sort_NUM(); }
-PTRef  LALogic::mkConst  (const char* num) { return mkConst(getSort_num(), num); }
-PTRef  LALogic::mkNumVar (const char* name) { return mkVar(getSort_num(), name); }
-bool LALogic::isBuiltinSort  (SRef sr) const { return sr == get_sort_NUM() || Logic::isBuiltinSort(sr); }
-bool LALogic::isBuiltinConstant(SymRef sr) const { return (isNumConst(sr) || Logic::isBuiltinConstant(sr)); }
-bool LALogic::isNumConst     (SymRef sr)     const { return Logic::isConstant(sr) && hasSortNum(sr); }
-bool LALogic::isNumConst     (PTRef tr)      const { return isNumConst(getPterm(tr).symb()); }
-bool LALogic::isNonnegNumConst (PTRef tr)  const { return isNumConst(tr) && getNumConst(tr) >= 0; }
-bool LALogic::hasSortNum(SymRef sr) const { return sym_store[sr].rsort() == get_sort_NUM(); }
-bool LALogic::hasSortNum(PTRef tr)  const { return hasSortNum(getPterm(tr).symb()); }
-bool LALogic::isUFEquality(PTRef tr) const { return !isNumEq(tr) && Logic::isUFEquality(tr); }
-bool LALogic::isTheoryEquality(PTRef tr) const { return isNumEq(tr); }
-bool LALogic::isAtom(PTRef tr) const  { return isNumEq(tr) || isNumLt(tr) || isNumGt(tr) || isNumLeq(tr) || isNumGeq(tr) || Logic::isAtom(tr); }
-bool LALogic::isUF(PTRef tr) const { return isUF(term_store[tr].symb()); }
-bool LALogic::isUF(SymRef sr) const { return !sym_store[sr].isInterpreted(); }
-bool LALogic::isNumPlus(SymRef sr) const { return sr == get_sym_Num_PLUS(); }
-bool LALogic::isNumPlus(PTRef tr) const { return isNumPlus(getPterm(tr).symb()); }
-bool LALogic::isNumMinus(SymRef sr) const { return sr == get_sym_Num_MINUS(); }
-bool LALogic::isNumMinus(PTRef tr) const { return isNumMinus(getPterm(tr).symb()); }
-bool LALogic::isNumNeg(SymRef sr) const { return sr == get_sym_Num_NEG(); }
-bool LALogic::isNumNeg(PTRef tr) const { return isNumNeg(getPterm(tr).symb()); }
-bool LALogic::isNumTimes(SymRef sr) const { return sr == get_sym_Num_TIMES(); }
-bool LALogic::isNumTimes(PTRef tr) const { return isNumTimes(getPterm(tr).symb()); }
-bool LALogic::isNumDiv(SymRef sr) const { return sr == get_sym_Num_DIV(); }
-bool LALogic::isNumDiv(PTRef tr) const { return isNumDiv(getPterm(tr).symb()); }
-bool LALogic::isNumEq(SymRef sr) const { return isEquality(sr) && (sym_store[sr][0] == get_sort_NUM());}
-bool LALogic::isNumEq(PTRef tr) const { return isNumEq(getPterm(tr).symb()); }
-bool LALogic::isNumLeq(SymRef sr) const { return sr == get_sym_Num_LEQ(); }
-bool LALogic::isNumLeq(PTRef tr) const { return isNumLeq(getPterm(tr).symb()); }
-bool LALogic::isNumLt(SymRef sr) const { return sr == get_sym_Num_LT(); }
-bool LALogic::isNumLt(PTRef tr) const { return isNumLt(getPterm(tr).symb()); }
-bool LALogic::isNumGeq(SymRef sr) const { return sr == get_sym_Num_GEQ(); }
-bool LALogic::isNumGeq(PTRef tr) const { return isNumGeq(getPterm(tr).symb()); }
-bool LALogic::isNumGt(SymRef sr) const { return sr == get_sym_Num_GT(); }
-bool LALogic::isNumGt(PTRef tr) const { return isNumGt(getPterm(tr).symb()); }
-bool LALogic::isNumVar(SymRef sr) const { return isVar(sr) && sym_store[sr].rsort() == get_sort_NUM(); }
-bool LALogic::isNumVarOrIte(SymRef sr) const { return isNumVar(sr) || isIte(sr); }
-bool LALogic::isNumVarOrIte(PTRef tr) const { return isNumVarOrIte(getPterm(tr).symb()); }
-bool LALogic::isNumVar(PTRef tr) const { return isNumVar(getPterm(tr).symb()); }
-bool LALogic::isNumZero(SymRef sr) const { return sr == get_sym_Num_ZERO(); }
-bool LALogic::isNumZero(PTRef tr) const { return tr == getTerm_NumZero(); }
-bool LALogic::isNumOne(SymRef sr) const { return sr == get_sym_Num_ONE(); }
-bool LALogic::isNumOne(PTRef tr) const { return tr == getTerm_NumOne(); }
 
 //PTRef mkNumNeg(PTRef, char **);
 PTRef LALogic::mkNumNeg(PTRef tr) {
@@ -567,7 +522,7 @@ PTRef LALogic::mkNumLeq(PTRef lhs, PTRef rhs)
     if (isConstant(sum_tmp)) {
         opensmt::Number const & v = this->getNumConst(sum_tmp);
         return v.sign() < 0 ? getTerm_false() : getTerm_true();
-    } if (isNumVarOrIte(sum_tmp) || isNumTimes(sum_tmp)) { // "sum_tmp = c * v", just scale to "v" or "-v" without changing the sign
+    } if (isNumVarLike(sum_tmp) || isNumTimes(sum_tmp)) { // "sum_tmp = c * v", just scale to "v" or "-v" without changing the sign
         sum_tmp = isNumTimes(sum_tmp) ? normalizeMul(sum_tmp) : sum_tmp;
         vec<PTRef> args;
         args.push(getTerm_NumZero());
@@ -645,7 +600,7 @@ PTRef LALogic::mkConst(SRef s, const char* name)
 {
     assert(strlen(name) != 0);
     PTRef ptr = PTRef_Undef;
-    if (s == get_sort_NUM()) {
+    if (s == get_sort_Num()) {
         char* rat;
         opensmt::stringToRational(rat, name);
         ptr = mkVar(s, rat);

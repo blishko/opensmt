@@ -130,23 +130,3 @@ LRALogic::LRALogic() :
     sortToIte.insert(sort_REAL, sym_Real_ITE);
     sym_store.setInterpreted(sym_Real_ITE);
 }
-
-const SymRef LRALogic::get_sym_Num_TIMES () const {return sym_Real_TIMES;}
-const SymRef LRALogic::get_sym_Num_DIV () const {return sym_Real_DIV;}
-const SymRef LRALogic::get_sym_Num_MINUS () const {return sym_Real_MINUS;}
-const SymRef LRALogic::get_sym_Num_PLUS () const {return sym_Real_PLUS;}
-const SymRef LRALogic::get_sym_Num_NEG () const {return sym_Real_NEG;}
-const SymRef LRALogic::get_sym_Num_LEQ () const {return sym_Real_LEQ;}
-const SymRef LRALogic::get_sym_Num_GEQ () const {return sym_Real_GEQ;}
-const SymRef LRALogic::get_sym_Num_LT () const {return sym_Real_LT;}
-const SymRef LRALogic::get_sym_Num_GT () const {return sym_Real_GT;}
-const SymRef LRALogic::get_sym_Num_EQ () const {return sym_Real_EQ;}
-const SymRef LRALogic::get_sym_Num_ZERO () const {return sym_Real_ZERO;}
-const SymRef LRALogic::get_sym_Num_ONE () const {return sym_Real_ONE;}
-const SymRef LRALogic::get_sym_Num_ITE () const {return sym_Real_ITE;}
-const SRef LRALogic::get_sort_NUM () const {return sort_REAL;}
-
-PTRef    LRALogic::getTerm_NumZero() const  { return term_Real_ZERO; }
-PTRef      LRALogic::getTerm_NumOne()  const  { return term_Real_ONE; }
-PTRef      LRALogic::getTerm_NumMinusOne()  const  { return term_Real_MINUSONE; }
-bool        LRALogic::hasSortNum(PTRef tr) const  { return hasSortReal(getPterm(tr).symb()); }

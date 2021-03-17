@@ -40,3 +40,38 @@ TEST_F(LIALogicMkTermsTest, testDeepLessThan) {
 //    LessThan_PTRef lt_shallow;
 //    ASSERT_NE(lt_shallow(prod1, prod2), lt_shallow(x, y));
 }
+
+TEST_F(LIALogicMkTermsTest, testDivMod) {
+    PTRef x = logic.mkNumVar("x");
+    PTRef two = logic.mkConst(2);
+    PTRef div = logic.mkNumDiv({x,two});
+    PTRef mod = logic.mkIntMod(x,two);
+    EXPECT_EQ(logic.getSymRef(div), logic.get_sym_Num_DIV());
+    EXPECT_EQ(logic.getSymRef(mod), logic.get_sym_Int_MOD());
+}
+
+TEST_F(LIALogicMkTermsTest, testMod_Plus) {
+    PTRef x = logic.mkNumVar("x");
+    PTRef two = logic.mkConst(2);
+    PTRef mod = logic.mkIntMod(x,two);
+    PTRef plus = logic.mkNumPlus(mod, two);
+    EXPECT_EQ(logic.getSymRef(plus), logic.get_sym_Num_PLUS());
+}
+
+TEST_F(LIALogicMkTermsTest, testMod_Times) {
+    PTRef x = logic.mkNumVar("x");
+    PTRef two = logic.mkConst(2);
+    PTRef three = logic.mkConst(3);
+    PTRef mod = logic.mkIntMod(x,two);
+    PTRef times = logic.mkNumTimes(mod, three);
+    EXPECT_EQ(logic.getSymRef(times), logic.get_sym_Num_TIMES());
+}
+
+TEST_F(LIALogicMkTermsTest, testMod_Leq) {
+    PTRef x = logic.mkNumVar("x");
+    PTRef two = logic.mkConst(2);
+    PTRef three = logic.mkConst(3);
+    PTRef mod = logic.mkIntMod(x,two);
+    PTRef leq = logic.mkNumLeq(mod, three);
+    EXPECT_EQ(logic.getSymRef(leq), logic.get_sym_Num_LEQ());
+}
