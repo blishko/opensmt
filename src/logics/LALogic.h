@@ -110,9 +110,11 @@ public:
     bool isNumGt(SymRef sr) const { return sr == get_sym_Num_GT(); }
     bool isNumGt(PTRef tr) const { return isNumGt(getPterm(tr).symb()); }
     bool isNumVar(SymRef sr) const { return isVar(sr) && sym_store[sr].rsort() == get_sort_Num(); }
+    bool isNumVar(PTRef tr) const { return isNumVar(getPterm(tr).symb()); }
     bool isNumVarOrIte(SymRef sr) const { return isNumVar(sr) || isIte(sr); }
     bool isNumVarOrIte(PTRef tr) const { return isNumVarOrIte(getPterm(tr).symb()); }
-    bool isNumVar(PTRef tr) const { return isNumVar(getPterm(tr).symb()); }
+    virtual bool isNumVarLike(SymRef tr) const { return isNumVarOrIte(tr); }
+    bool isNumVarLike(PTRef tr) const { return isNumVarLike(getPterm(tr).symb()); }
     bool isNumZero(SymRef sr) const { return sr == get_sym_Num_ZERO(); }
     bool isNumZero(PTRef tr) const { return tr == getTerm_NumZero(); }
     bool isNumOne(SymRef sr) const { return sr == get_sym_Num_ONE(); }

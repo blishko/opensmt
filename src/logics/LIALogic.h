@@ -69,6 +69,7 @@ public:
     bool        isIntVar(SymRef sr)   const { return isVar(sr) && sym_store[sr].rsort() == sort_INTEGER; }
     bool        isIntZero(SymRef sr)  const { return sr == sym_Int_ZERO; }
     bool        isIntOne(SymRef sr)   const { return sr == sym_Int_ONE; }
+    bool        isNumVarLike(SymRef tr) const override { return LALogic::isNumVarLike(tr) || isIntDiv(tr) || isIntMod(tr); }
 
     bool        hasSortInt(SymRef sr) const { return sym_store[sr].rsort() == sort_INTEGER; }
 

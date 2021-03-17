@@ -49,3 +49,29 @@ TEST_F(LIALogicMkTermsTest, testDivMod) {
     EXPECT_EQ(logic.getSymRef(div), logic.get_sym_Num_DIV());
     EXPECT_EQ(logic.getSymRef(mod), logic.get_sym_Int_MOD());
 }
+
+TEST_F(LIALogicMkTermsTest, testMod_Plus) {
+    PTRef x = logic.mkNumVar("x");
+    PTRef two = logic.mkConst(2);
+    PTRef mod = logic.mkIntMod(x,two);
+    PTRef plus = logic.mkNumPlus(mod, two);
+    EXPECT_EQ(logic.getSymRef(plus), logic.get_sym_Num_PLUS());
+}
+
+TEST_F(LIALogicMkTermsTest, testMod_Times) {
+    PTRef x = logic.mkNumVar("x");
+    PTRef two = logic.mkConst(2);
+    PTRef three = logic.mkConst(3);
+    PTRef mod = logic.mkIntMod(x,two);
+    PTRef times = logic.mkNumTimes(mod, three);
+    EXPECT_EQ(logic.getSymRef(times), logic.get_sym_Num_TIMES());
+}
+
+TEST_F(LIALogicMkTermsTest, testMod_Leq) {
+    PTRef x = logic.mkNumVar("x");
+    PTRef two = logic.mkConst(2);
+    PTRef three = logic.mkConst(3);
+    PTRef mod = logic.mkIntMod(x,two);
+    PTRef leq = logic.mkNumLeq(mod, three);
+    EXPECT_EQ(logic.getSymRef(leq), logic.get_sym_Num_LEQ());
+}

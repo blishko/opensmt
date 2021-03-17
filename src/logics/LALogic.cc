@@ -33,11 +33,11 @@ bool LALogic::isNegated(PTRef tr) const {
 }
 
 bool LALogic::isLinearFactor(PTRef tr) const {
-    if (isNumConst(tr) || isNumVarOrIte(tr)) { return true; }
+    if (isNumConst(tr) || isNumVarLike(tr)) { return true; }
     if (isNumTimes(tr)) {
         Pterm const& term = getPterm(tr);
-        return term.size() == 2 && ((isNumConst(term[0]) && (isNumVarOrIte(term[1])))
-                                    || (isNumConst(term[1]) && (isNumVarOrIte(term[0]))));
+        return term.size() == 2 && ((isNumConst(term[0]) && (isNumVarLike(term[1])))
+                                    || (isNumConst(term[1]) && (isNumVarLike(term[0]))));
     }
     return false;
 }
@@ -64,7 +64,7 @@ LALogic::getNumConst(PTRef tr) const
 
 void LALogic::splitTermToVarAndConst(const PTRef& term, PTRef& var, PTRef& fac) const
 {
-    assert(isNumTimes(term) || isNumDiv(term) || isNumVarOrIte(term) || isConstant(term) || isUF(term));
+    assert(isNumTimes(term) || isNumDiv(term) || isNumVarLike(term) || isConstant(term));
     if (isNumTimes(term) || isNumDiv(term)) {
         assert(getPterm(term).size() == 2);
         fac = getPterm(term)[0];
@@ -75,8 +75,8 @@ void LALogic::splitTermToVarAndConst(const PTRef& term, PTRef& var, PTRef& fac) 
             fac = t;
         }
         assert(isConstant(fac));
-        assert(isNumVarOrIte(var) || isUF(var));
-    } else if (isNumVarOrIte(term) || isUF(term)) {
+        assert(isNumVarLike(var));
+    } else if (isNumVarLike(term)) {
         var = term;
         fac = getTerm_NumOne();
     } else {
@@ -213,12 +213,11 @@ bool LALogic::isBuiltinFunction(const SymRef sr) const
 }
 bool LALogic::isNumTerm(PTRef tr) const
 {
-    auto isNumVarOrUFOrIte = [this](PTRef tr) { return isNumVarOrIte(tr) || isUF(tr); };
-    const Pterm& t = getPterm(tr);
-    if (isNumVarOrIte(tr))
+    if (isNumVarLike(tr))
         return true;
+    const Pterm& t = getPterm(tr);
     if (t.size() == 2 && isNumTimes(tr))
-        return (isNumVarOrUFOrIte(t[0]) && isConstant(t[1])) || (isNumVarOrUFOrIte(t[1]) && isConstant(t[0]));
+        return (isNumVarLike(t[0]) && isConstant(t[1])) || (isNumVarLike(t[1]) && isConstant(t[0]));
     else if (t.size() == 0)
         return isNumVar(tr) || isConstant(tr);
     else
@@ -523,7 +522,7 @@ PTRef LALogic::mkNumLeq(PTRef lhs, PTRef rhs)
     if (isConstant(sum_tmp)) {
         opensmt::Number const & v = this->getNumConst(sum_tmp);
         return v.sign() < 0 ? getTerm_false() : getTerm_true();
-    } if (isNumVarOrIte(sum_tmp) || isNumTimes(sum_tmp)) { // "sum_tmp = c * v", just scale to "v" or "-v" without changing the sign
+    } if (isNumVarLike(sum_tmp) || isNumTimes(sum_tmp)) { // "sum_tmp = c * v", just scale to "v" or "-v" without changing the sign
         sum_tmp = isNumTimes(sum_tmp) ? normalizeMul(sum_tmp) : sum_tmp;
         vec<PTRef> args;
         args.push(getTerm_NumZero());

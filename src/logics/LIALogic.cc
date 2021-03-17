@@ -141,7 +141,7 @@ PTRef LIALogic::sumToNormalizedInequality(PTRef sum) {
         PTRef var;
         PTRef coeff;
         splitTermToVarAndConst(factor, var, coeff);
-        assert(isNumVarOrIte(var) and isNumConst(coeff));
+        assert(LALogic::isNumVarLike(var) and isNumConst(coeff));
         vars.push(var);
         coeffs.push_back(getNumConst(coeff));
     }
