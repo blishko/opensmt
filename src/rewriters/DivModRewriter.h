@@ -8,13 +8,12 @@
 #include "PTRef.h"
 
 #include "Rewriter.h"
+#include "LIALogic.h"
 
 #include "OsmtApiException.h"
 
 #include <unordered_map>
 #include <string>
-
-class LIALogic;
 
 class DivModConfig : public DefaultRewriterConfig {
     LIALogic & logic;
@@ -103,7 +102,7 @@ public:
 };
 
 // Simple single-use version
-PTRef rewriteDivMod(LIALogic & logic, PTRef root) {
+inline PTRef rewriteDivMod(LIALogic & logic, PTRef root) {
     return DivModRewriter(logic).rewrite(root);
 }
 
