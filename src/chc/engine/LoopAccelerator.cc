@@ -112,6 +112,7 @@ std::map<EId, PTRef> LoopAccelerator::getAcceleratedLoops(std::vector<EId> selfL
             // reformulate the equality as 'next = f(current)'
             PTRef lhs = logic.getPterm(conjunct)[0];
             PTRef rhs = logic.getPterm(conjunct)[1];
+            if (logic.getSortRef(lhs) != logic.getSort_num()) { break; }
             PTRef zeroTerm = logic.mkNumMinus(lhs, rhs);
             PTRef nextStateDef = LATermUtils(logic).expressZeroTermFor(zeroTerm, nextState);
             // we can accelerate if 'f(current) = current + c' for some constant c
