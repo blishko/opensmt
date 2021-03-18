@@ -75,3 +75,40 @@ TEST_F(LIALogicMkTermsTest, testMod_Leq) {
     PTRef leq = logic.mkNumLeq(mod, three);
     EXPECT_EQ(logic.getSymRef(leq), logic.get_sym_Num_LEQ());
 }
+
+TEST_F(LIALogicMkTermsTest, testDiv_Constants_PosPos) {
+    PTRef two = logic.mkConst(2);
+    PTRef three = logic.mkConst(3);
+    PTRef div = logic.mkNumDiv({two, three});
+    PTRef mod = logic.mkIntMod(two, three);
+    EXPECT_EQ(div, logic.getTerm_NumZero());
+    EXPECT_EQ(mod, two);
+}
+
+TEST_F(LIALogicMkTermsTest, testDiv_Constants_PosNeg) {
+    PTRef two = logic.mkConst(2);
+    PTRef mthree = logic.mkConst(-3);
+    PTRef div = logic.mkNumDiv({two, mthree});
+    PTRef mod = logic.mkIntMod(two, mthree);
+    EXPECT_EQ(div, logic.getTerm_NumZero());
+    EXPECT_EQ(mod, two);
+}
+
+TEST_F(LIALogicMkTermsTest, testDiv_Constants_NegPos) {
+    PTRef mtwo = logic.mkConst(-2);
+    PTRef three = logic.mkConst(3);
+    PTRef div = logic.mkNumDiv({mtwo, three});
+    PTRef mod = logic.mkIntMod(mtwo, three);
+    EXPECT_EQ(div, logic.mkConst(-1));
+    EXPECT_EQ(mod, logic.getTerm_NumOne());
+}
+
+
+TEST_F(LIALogicMkTermsTest, testDiv_Constants_NegNeg) {
+    PTRef mtwo = logic.mkConst(-2);
+    PTRef mthree = logic.mkConst(-3);
+    PTRef div = logic.mkNumDiv({mtwo, mthree});
+    PTRef mod = logic.mkIntMod(mtwo, mthree);
+    EXPECT_EQ(div, logic.getTerm_NumOne());
+    EXPECT_EQ(mod, logic.getTerm_NumOne());
+}

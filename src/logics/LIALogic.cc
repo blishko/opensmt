@@ -219,11 +219,31 @@ PTRef LIALogic::mkNumDiv(const vec<PTRef> &args) {
     if (not isConstant(divisor)) {
         throw LANonLinearException("Only division by constant is permitted in linear arithmetic!");
     }
+    if (isConstant(args[0])) {
+        auto const& dividendValue = getNumConst(args[0]);
+        auto const& divisorValue = getNumConst(divisor);
+        assert(dividendValue.isInteger() and divisorValue.isInteger());
+        // evaluate immediately the operation on two constants
+        auto realDiv = dividendValue / divisorValue;
+        auto intDiv = divisorValue.sign() > 0 ? realDiv.floor() : realDiv.ceil();
+        return mkConst(intDiv);
+    }
     return insertTermHash(sym_Int_DIV, args);
 }
 
 const PTRef LIALogic::mkIntMod(PTRef dividend, PTRef divisor) {
     if (not isNumConst(divisor)) { throw OsmtApiException("Divisor must be constant in linear logic"); }
+    if (isConstant(dividend)) {
+        auto const& dividendValue = getNumConst(dividend);
+        auto const& divisorValue = getNumConst(divisor);
+        assert(dividendValue.isInteger() and divisorValue.isInteger());
+        // evaluate immediately the operation on two constants
+        auto realDiv = dividendValue / divisorValue;
+        auto intDiv = divisorValue.sign() > 0 ? realDiv.floor() : realDiv.ceil();
+        auto intMod = dividendValue - intDiv * divisorValue;
+        assert(intMod.sign() >= 0 and intMod < abs(divisorValue));
+        return mkConst(intMod);
+    }
     return insertTermHash(sym_Int_MOD, {dividend, divisor});
 }
 
