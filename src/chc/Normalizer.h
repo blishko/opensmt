@@ -8,6 +8,8 @@
 #include "ChcSystem.h"
 #include "TermUtils.h"
 
+#include "DivModRewriter.h"
+
 #include <memory>
 #include <unordered_map>
 
@@ -93,6 +95,10 @@ class Normalizer{
         // interpreted part
         // just add the toplevel equalities collected for this clause; Here we assume 'head' has already been processed
         PTRef newInterpretedPart = logic.mkAnd(body.interpretedPart.fla, logic.mkAnd(topLevelEqualities));
+        LIALogic * lialogic = dynamic_cast<LIALogic *>(&logic);
+        if (lialogic) {
+            newInterpretedPart = DivModRewriter(*lialogic).rewrite(newInterpretedPart);
+        }
         return ChcBody{InterpretedFla{newInterpretedPart}, std::move(newUninterpretedPart)};
     }
 
@@ -157,9 +163,9 @@ class Normalizer{
             auto newEnd = std::remove_if(allVars.begin(), allVars.end(), isValidVar);
             allVars.shrink_(allVars.end() - newEnd);
             if (allVars.size() > 0) {
-//                    std::cout << "Before variable elimination: " << logic.printTerm(newInterpretedBody) << std::endl;
+//                std::cout << "Before variable elimination: " << logic.printTerm(newInterpretedBody) << std::endl;
                 newInterpretedBody = TrivialQuantifierElimination(logic).eliminateVars(allVars, newInterpretedBody);
-//                    std::cout << "After variable elimination: " << logic.printTerm(newInterpretedBody) << std::endl;
+//                std::cout << "After variable elimination: " << logic.printTerm(newInterpretedBody) << std::endl;
             }
             auto varsAfterElimination = utils.getVars(newInterpretedBody);
             auto localsEnd = std::remove_if(varsAfterElimination.begin(), varsAfterElimination.end(), isValidVar);

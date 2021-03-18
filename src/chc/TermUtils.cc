@@ -35,6 +35,9 @@ PTRef TrivialQuantifierElimination::tryGetSubstitutionFromEquality(PTRef var, PT
         }
         PTRef zeroTerm = lalogic.mkNumMinus(lhs, rhs);
         PTRef substitutionTerm = LATermUtils(lalogic).expressZeroTermFor(zeroTerm, var);
+        if (substitutionTerm == PTRef_Undef) {
+            return PTRef_Undef;
+        }
         // For LIA we should most likely check the coefficients in the result are Integers
         if (lalogic.getLogic() == opensmt::Logic_t::QF_LIA) {
             auto hasIntegerCoeff = [&lalogic](PTRef factor) {
@@ -71,7 +74,7 @@ PTRef LATermUtils::expressZeroTermFor(PTRef zeroTerm, PTRef var) {
         return logic.getTerm_NumZero();
     } else {
         assert(logic.isNumPlus(zeroTerm));
-        PTRef varCoeff;
+        PTRef varCoeff = PTRef_Undef;
         vec<PTRef> otherFactors;
         auto size = logic.getPterm(zeroTerm).size();
         for (int i = 0; i < size; ++i) {
@@ -86,8 +89,11 @@ PTRef LATermUtils::expressZeroTermFor(PTRef zeroTerm, PTRef var) {
                 otherFactors.push(factor);
             }
         }
+        if (varCoeff == PTRef_Undef) {
+            return PTRef_Undef;
+        }
         // now we have 't = 0' where 't = c * var + t1' => 'var = t1/-c'
-        PTRef res = logic.mkNumDiv(logic.mkNumPlus(otherFactors), logic.mkNumNeg(varCoeff));
+        PTRef res = logic.mkNumTimes(logic.mkNumPlus(otherFactors), logic.mkConst(FastRational(-1) / logic.getNumConst(varCoeff)));
         return res;
     }
 }
