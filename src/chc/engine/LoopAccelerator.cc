@@ -94,7 +94,7 @@ std::map<EId, PTRef> LoopAccelerator::getAcceleratedLoops(std::vector<EId> selfL
         auto edge = graph.getEdge(eid);
         assert(edge.from == edge.to);
         PTRef label = edge.fla.fla;
-        PTRef loopCounter = getLoopCounterVar();
+        PTRef loopCounterVar = getLoopCounterVar();
         vec<PTRef> varDefs;
         bool success = false;
         auto conjuncts = utils.getTopLevelConjuncts(label);
@@ -112,6 +112,7 @@ std::map<EId, PTRef> LoopAccelerator::getAcceleratedLoops(std::vector<EId> selfL
             // reformulate the equality as 'next = f(current)'
             PTRef lhs = logic.getPterm(conjunct)[0];
             PTRef rhs = logic.getPterm(conjunct)[1];
+            if (logic.getSortRef(lhs) != logic.getSort_num()) { break; }
             PTRef zeroTerm = logic.mkNumMinus(lhs, rhs);
             PTRef nextStateDef = LATermUtils(logic).expressZeroTermFor(zeroTerm, nextState);
             // we can accelerate if 'f(current) = current + c' for some constant c
@@ -130,7 +131,7 @@ std::map<EId, PTRef> LoopAccelerator::getAcceleratedLoops(std::vector<EId> selfL
                     assert(logic.isConstant(constant));
                     assert(logic.isVar(var) || logic.isNumTimes(var) || logic.isIte(var));
                     if (logic.isVar(var)) {
-                        acceleratedDefinition = logic.mkNumPlus(var, logic.mkNumTimes(constant, loopCounter));
+                        acceleratedDefinition = logic.mkNumPlus(var, logic.mkNumTimes(constant, loopCounterVar));
                     }
                 }
             }
@@ -143,6 +144,7 @@ std::map<EId, PTRef> LoopAccelerator::getAcceleratedLoops(std::vector<EId> selfL
             }
         }
         if (success) {
+            varDefs.push(logic.mkNumGeq(loopCounterVar, logic.getTerm_NumZero()));
             acceleratedDefs.insert({eid, logic.mkAnd(varDefs)});
         }
     }
