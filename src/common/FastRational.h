@@ -166,10 +166,11 @@ private:
         if (!mpqPartValid()) {
             assert(wordPartValid());
             if (!mpqMemoryAllocated()) {
-                mpq_init(mpq);
+                mpz_init_set_si(mpq_numref(mpq), num);
+                mpz_init_set_ui(mpq_denref(mpq), den);
+            } else {
+                mpq_set_si(mpq, num, den);
             }
-            mpz_set_si(mpq_numref(mpq), num);
-            mpz_set_ui(mpq_denref(mpq), den);
             setMpqAllocatedAndValid();
         }
     }
