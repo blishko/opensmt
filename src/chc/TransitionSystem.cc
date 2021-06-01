@@ -61,11 +61,11 @@ PTRef TransitionSystemHelper::getFutureStateFormula(PTRef fla, std::size_t k) {
     std::vector<PTRef> const& stateVars = systemType.getStateVars();
     auto const & frameVars = frames[k].frameVars;
     assert(stateVars.size() == frameVars.size());
-    MapWithKeys<PTRef, PtAsgn, PTRefHash> substMap;
+    TermUtils::substitutions_map substMap;
     for (std::size_t i = 0; i < stateVars.size(); ++i) {
-        substMap.insert(stateVars[i], PtAsgn(frameVars[i], l_True));
+        substMap.insert({stateVars[i], frameVars[i]});
     }
-    return Substitutor(logic, substMap).rewrite(fla);
+    return TermUtils(logic).varSubstitute(fla, substMap);
 }
 
 PTRef TransitionSystemHelper::getFutureTransitionFormula(PTRef fla, std::size_t k) {
@@ -75,15 +75,15 @@ PTRef TransitionSystemHelper::getFutureTransitionFormula(PTRef fla, std::size_t 
     auto const & nextStateVars = systemType.getNextStateVars();
     auto const & frameVars = frames[k].frameVars;
     assert(stateVars.size() == frameVars.size());
-    MapWithKeys<PTRef, PtAsgn, PTRefHash> substMap;
+    TermUtils::substitutions_map substMap;
     for (std::size_t i = 0; i < stateVars.size(); ++i) {
-        substMap.insert(stateVars[i], PtAsgn(frameVars[i], l_True));
+        substMap.insert({stateVars[i], frameVars[i]});
     }
     auto const & nextFrameVars = frames[k + 1].frameVars;
     for (std::size_t i = 0; i < nextStateVars.size(); ++i) {
-        substMap.insert(nextStateVars[i], PtAsgn(nextFrameVars[i], l_True));
+        substMap.insert({nextStateVars[i], nextFrameVars[i]});
     }
-    return Substitutor(logic, substMap).rewrite(fla);
+    return TermUtils(logic).varSubstitute(fla, substMap);
 }
 
 PTRef TransitionSystemHelper::toFrameVar(PTRef var, std::size_t frameNum) {
@@ -130,4 +130,24 @@ bool SystemType::isTransitionFormula(PTRef fla) const {
     return std::all_of(vars.begin(), vars.end(), [&allVars](PTRef var){
         return std::find(std::begin(allVars), std::end(allVars), var) != std::end(allVars);
     });
+}
+
+PTRef TransitionSystem::getInit() const {
+    return init;
+}
+
+PTRef TransitionSystem::getQuery() const {
+    return query;
+}
+
+PTRef TransitionSystem::getTransition() const {
+    return transition;
+}
+
+std::vector<PTRef> TransitionSystem::getStateVars() const {
+    return this->systemType->getStateVars();
+}
+
+std::vector<PTRef> TransitionSystem::getNextStateVars() const {
+    return this->systemType->getNextStateVars();
 }
