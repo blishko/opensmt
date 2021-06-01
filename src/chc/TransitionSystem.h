@@ -85,10 +85,15 @@ public:
 
     PTRef getPathFormula(std::size_t unrollingNumber);
 
+    PTRef getInit() const;
+    PTRef getQuery() const;
+    PTRef getTransition() const;
+
+    std::vector<PTRef> getStateVars() const;
+    std::vector<PTRef> getNextStateVars() const;
+
 private:
     bool isWellFormed();
-
-    PTRef moveNStepsIntoFuture(PTRef fla, std::size_t n);
 
     PTRef toNextStateVar(PTRef var, std::size_t steps);
     PTRef toNextStateVar(PTRef var) { return toNextStateVar(var, 1); }
