@@ -23,6 +23,7 @@ class AcceleratedBmc : public Engine {
     PTRef transition;
     PTRef query;
     vec<PTRef> stateVariables;
+    vec<PTRef> auxiliaryVariables;
 
 public:
     AcceleratedBmc(Logic& logic, Options const & options) : logic(logic), options(options) {}
