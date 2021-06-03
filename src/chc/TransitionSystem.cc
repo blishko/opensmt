@@ -9,17 +9,23 @@ bool TransitionSystem::isWellFormed() {
 //    return systemType->isStateFormula(init) && systemType->isStateFormula(query) && systemType->isTransitionFormula(transition);
     bool ok = systemType->isStateFormula(init);
     if (not ok) {
-        std::cerr << "Problem in init:" << logic.printTerm(init) << std::endl;
+        std::stringstream ss;
+        TermUtils(logic).printTermWithLets(ss, init);
+        std::cerr << "Problem in init:" << ss.str() << std::endl;
         return false;
     }
     ok = systemType->isStateFormula(query);
     if (not ok) {
-        std::cerr << "Problem in query: " << logic.printTerm(query) << std::endl;
+        std::stringstream ss;
+        TermUtils(logic).printTermWithLets(ss, query);
+        std::cerr << "Problem in query: " << ss.str() << std::endl;
         return false;
     }
     ok = systemType->isTransitionFormula(transition);
     if (not ok) {
-        std::cerr << "Problem in transition: " << logic.printTerm(transition) << std::endl;
+        std::stringstream ss;
+        TermUtils(logic).printTermWithLets(ss, transition);
+        std::cerr << "Problem in transition: " << ss.str() << std::endl;
         return false;
     }
     return true;
@@ -94,7 +100,7 @@ PTRef TransitionSystemHelper::toFrameVar(PTRef var, std::size_t frameNum) {
     return logic.mkVar(sort, newVarName.c_str());
 }
 
-SystemType::SystemType(std::vector<SRef> stateVarTypes, Logic & logic) : logic(logic) {
+SystemType::SystemType(std::vector<SRef> stateVarTypes, std::vector<SRef> auxiliaryVarTypes, Logic & logic) : logic(logic) {
     struct Helper {
         Helper(Logic & logic, std::string varNamePrefix) : logic(logic), varNamePrefix(std::move(varNamePrefix)) {}
         std::string prefix = "ts::";
@@ -108,6 +114,8 @@ SystemType::SystemType(std::vector<SRef> stateVarTypes, Logic & logic) : logic(l
     std::transform(stateVarTypes.begin(), stateVarTypes.end(), std::back_inserter(stateVars), helper);
     helper.varNamePrefix = "xp";
     std::transform(stateVarTypes.begin(), stateVarTypes.end(), std::back_inserter(nextStateVars), helper);
+    helper.varNamePrefix = "aux";
+    std::transform(auxiliaryVarTypes.begin(), auxiliaryVarTypes.end(), std::back_inserter(auxiliaryVars), helper);
 }
 
 bool SystemType::isStateFormula(PTRef fla) const {
@@ -123,9 +131,10 @@ bool SystemType::isStateFormula(PTRef fla) const {
 
 bool SystemType::isTransitionFormula(PTRef fla) const {
     std::vector<PTRef> allVars;
-    allVars.reserve(stateVars.size() + nextStateVars.size());
+    allVars.reserve(stateVars.size() + nextStateVars.size() + auxiliaryVars.size());
     allVars.insert(allVars.end(), stateVars.begin(), stateVars.end());
     allVars.insert(allVars.end(), nextStateVars.begin(), nextStateVars.end());
+    allVars.insert(allVars.end(), auxiliaryVars.begin(), auxiliaryVars.end());
     vec<PTRef> vars = TermUtils(logic).getVars(fla);
     return std::all_of(vars.begin(), vars.end(), [&allVars](PTRef var){
         return std::find(std::begin(allVars), std::end(allVars), var) != std::end(allVars);
@@ -150,4 +159,8 @@ std::vector<PTRef> TransitionSystem::getStateVars() const {
 
 std::vector<PTRef> TransitionSystem::getNextStateVars() const {
     return this->systemType->getNextStateVars();
+}
+
+std::vector<PTRef> TransitionSystem::getAuxiliaryVars() const {
+    return this->systemType->getAuxiliaryVars();
 }

@@ -331,11 +331,18 @@ void AcceleratedBmc::resetTransitionSystem(TransitionSystem const & system) {
     TimeMachine timeMachine(logic);
     TermUtils utils(logic);
     this->stateVariables.clear();
+    this->auxiliaryVariables.clear();
     auto stateVars = system.getStateVars();
+    auto auxVars = system.getAuxiliaryVars();
     TermUtils::substitutions_map substMap;
     for (PTRef var : stateVars) {
         PTRef versionedVar = timeMachine.getVarVersionZero(var);
         this->stateVariables.push(versionedVar);
+        substMap.insert({var, versionedVar});
+    }
+    for (PTRef var : auxVars) {
+        PTRef versionedVar = timeMachine.getVarVersionZero(var);
+        this->auxiliaryVariables.push(versionedVar);
         substMap.insert({var, versionedVar});
     }
     this->init = utils.varSubstitute(system.getInit(), substMap);
