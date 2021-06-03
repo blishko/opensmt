@@ -16,7 +16,7 @@ class AcceleratedBmc : public Engine {
     Options const & options;
 
     vec<PTRef> exactPowers;
-    vec<PTRef> lessThenPowers;
+    vec<PTRef> lessThanPowers;
 
     // Versioned representation of the transition system
     PTRef init;
@@ -44,18 +44,25 @@ private:
 
     VerificationResult checkPower(unsigned short power);
 
-    PTRef getPower(unsigned short power) const;
-    void storePower(unsigned short power, PTRef tr);
+    PTRef getExactPower(unsigned short power) const;
+    void storeExactPower(unsigned short power, PTRef tr);
+
+    PTRef getLessThanPower(unsigned short power) const;
+    void storeLessThanPower(unsigned short power, PTRef tr);
 
     PTRef getNextVersion(PTRef currentVersion, int);
     PTRef getNextVersion(PTRef currentVersion) { return getNextVersion(currentVersion, 1); };
 
     vec<PTRef> getStateVars(int version);
 
+    /* Shifts only next-next vars to next vars */
     PTRef cleanInterpolant(PTRef itp);
+    /* Shifts only next vars to next-next vars */
+    PTRef shiftOnlyNextVars(PTRef transition);
 
     enum class ReachabilityResult {REACHABLE, UNREACHABLE};
-    ReachabilityResult reachabilityQuery(PTRef from, PTRef to, unsigned short power);
+    ReachabilityResult reachabilityQueryExact(PTRef from, PTRef to, unsigned short power);
+    ReachabilityResult reachabilityQueryLessThan(PTRef from, PTRef to, unsigned short power);
 
     PTRef extractStateFromModel(vec<PTRef> const & vars, Model& model);
 };
