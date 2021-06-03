@@ -34,17 +34,30 @@ PTRef AcceleratedBmc::getQuery() const {
     return query;
 }
 
-PTRef AcceleratedBmc::getPower(unsigned short power) const {
+PTRef AcceleratedBmc::getExactPower(unsigned short power) const {
     assert(power >= 0 and power < exactPowers.size());
     return exactPowers[power];
 }
 
-void AcceleratedBmc::storePower(unsigned short power, PTRef tr) {
+void AcceleratedBmc::storeExactPower(unsigned short power, PTRef tr) {
     assert(power >= 0);
     exactPowers.growTo(power + 1, PTRef_Undef);
     PTRef current = exactPowers[power];
     PTRef toStore = current == PTRef_Undef ? tr : logic.mkAnd(current, tr);
     exactPowers[power] = toStore;
+}
+
+PTRef AcceleratedBmc::getLessThanPower(unsigned short power) const {
+    assert(power >= 0 and power < lessThanPowers.size());
+    return lessThanPowers[power];
+}
+
+void AcceleratedBmc::storeLessThanPower(unsigned short power, PTRef tr) {
+    assert(power >= 0);
+    lessThanPowers.growTo(power + 1, PTRef_Undef);
+    PTRef current = lessThanPowers[power];
+    PTRef toStore = current == PTRef_Undef ? tr : logic.mkAnd(current, tr);
+    lessThanPowers[power] = toStore;
 }
 
 vec<PTRef> AcceleratedBmc::getStateVars(int version) {
@@ -73,28 +86,35 @@ GraphVerificationResult AcceleratedBmc::solveTransitionSystem(TransitionSystem &
 VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
     assert(power > 0);
     // First compute the exact power using the concatenation of previous one
-    auto res = reachabilityQuery(init, query, power);
+    auto res = reachabilityQueryExact(init, query, power);
     if (res == ReachabilityResult::REACHABLE) {
         return VerificationResult::UNSAFE;
     }
-    // TODO: temporary
-    return VerificationResult::SAFE;
-    // If reachable, we need to refine previous power, otherwise we need to interpolate to obtain the current power
-    throw std::logic_error("Not implemented yet");
+    // Second compute the <2^n transition relation using information from previous level;
+    res = reachabilityQueryLessThan(init, query, power);
+    switch (res) {
+        case ReachabilityResult::REACHABLE:
+            return VerificationResult::UNSAFE;
+        case ReachabilityResult::UNREACHABLE:
+            return VerificationResult::SAFE;
+        default:
+            assert(false);
+            throw std::logic_error("Unreachable!");
+    }
 }
 
 /*
- * Check if 'to' is reachabile from 'from' (these are state formulas) in exactly 2^n steps (n is 'power').
+ * Check if 'to' is reachable from 'from' (these are state formulas) in exactly 2^n steps (n is 'power').
  * We do this using the (n-1)th abstraction of the transition relation and check 2-step reachability in this abstraction.
- * If 'from' is unreachable, we interpolate over the 2 step transition to obtain 1-step transition of level n.
+ * If 'to' is unreachable, we interpolate over the 2 step transition to obtain 1-step transition of level n.
  */
-AcceleratedBmc::ReachabilityResult AcceleratedBmc::reachabilityQuery(PTRef from, PTRef to, unsigned short power) {
+AcceleratedBmc::ReachabilityResult AcceleratedBmc::reachabilityQueryExact(PTRef from, PTRef to, unsigned short power) {
     assert(power >= 1);
     if (power == 1) { // Basic check with real transition relation
-        // TODO: this solver can persistent and used incrementally
+        // TODO: this solver can be persistent and used incrementally
         SMTConfig config;
         MainSolver solver(logic, config, "1-step checker");
-        solver.insertFormula(getPower(1));
+        solver.insertFormula(getExactPower(1));
         PTRef goal = getNextVersion(to);
         solver.insertFormula(logic.mkAnd(from, goal));
         auto res = solver.check();
@@ -112,8 +132,8 @@ AcceleratedBmc::ReachabilityResult AcceleratedBmc::reachabilityQuery(PTRef from,
         const char * msg = "ok";
         config.setOption(SMTConfig::o_produce_inter, SMTOption(true), msg);
         config.setSimplifyInterpolant(4);
-        MainSolver solver(logic, config, "Reachability checker");
-        PTRef previousTransition = getPower(power - 1);
+        MainSolver solver(logic, config, "Exact reachability checker");
+        PTRef previousTransition = getExactPower(power - 1);
         PTRef translatedPreviousTransition = getNextVersion(previousTransition);
         PTRef twoStepTransition = logic.mkAnd(previousTransition, translatedPreviousTransition);
         // TODO: assert from and to are current-state formulas
@@ -130,7 +150,7 @@ AcceleratedBmc::ReachabilityResult AcceleratedBmc::reachabilityQuery(PTRef from,
             PTRef itp = itps[0];
             // replace next-next variables with next-variables
             itp = cleanInterpolant(itp);
-            storePower(power, itp);
+            storeExactPower(power, itp);
             return AcceleratedBmc::ReachabilityResult::UNREACHABLE;
         } else if (res == s_True) {
             auto model = solver.getModel();
@@ -142,20 +162,118 @@ AcceleratedBmc::ReachabilityResult AcceleratedBmc::reachabilityQuery(PTRef from,
             PTRef nextState = getNextVersion(extractStateFromModel(nextVars, *model), -1);
             PTRef nextnextState = getNextVersion(extractStateFromModel(nextnextVars, *model), -2);
             // check the reachability using lower level abstraction
-            auto subQueryRes = reachabilityQuery(currentState, nextState, power - 1);
+            auto subQueryRes = reachabilityQueryExact(currentState, nextState, power - 1);
             if (isUnreachable(subQueryRes)) {
-                assert(getPower(power - 1) != previousTransition);
+                assert(getExactPower(power - 1) != previousTransition);
                 continue; // We need to re-check this level with refined abstraction
             }
             // here the first half of the found path is feasible, check the second half
-            subQueryRes = reachabilityQuery(nextState, nextnextState, power - 1);
+            subQueryRes = reachabilityQueryExact(nextState, nextnextState, power - 1);
             if (isUnreachable(subQueryRes)) {
-                assert(getPower(power - 1) != previousTransition);
+                assert(getExactPower(power - 1) != previousTransition);
                 continue; // We need to re-check this level with refined abstraction
             }
             assert(isReachable(subQueryRes));
             // both halves of the found path are feasible => this path is feasible!
             return ReachabilityResult::REACHABLE;
+        } else {
+            throw std::logic_error("Accelerated BMC: Unexpected situation checking reachability");
+        }
+    }
+}
+
+/*
+ * Check if 'to' is reachable from 'from' (these are state formulas) in less than 2^n steps (n is 'power').
+ * We do this using the (n-1)th abstractions of the transition relation (both exact and less-than).
+ * Reachability in <2^n steps can happen if it is reachable in <2^(n-1) steps or if it is reachable in 2^(n-1) + <2^(n-1) steps.
+ * If 'to' is unreachable, we interpolate over the 2 step transition to obtain 1-step transition of level n.
+ */
+AcceleratedBmc::ReachabilityResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from, PTRef to, unsigned short power) {
+    assert(power >= 1);
+    if (power == 1) {
+        SMTConfig config;
+        MainSolver solver(logic, config, "0-step checker");
+        solver.insertFormula(logic.mkAnd(from, to));
+        auto res = solver.check();
+        if (res == s_True) {
+            return ReachabilityResult::REACHABLE;
+        } else if (res == s_False) {
+            return ReachabilityResult::UNREACHABLE;
+        }
+        throw std::logic_error("Accelerated BMC: Unexpected situation checking reachability");
+    }
+    assert(power >= 2);
+    auto isReachable = [](ReachabilityResult res) { return res == ReachabilityResult::REACHABLE; };
+    auto isUnreachable = [](ReachabilityResult res) { return res == ReachabilityResult::UNREACHABLE; };
+    while(true) {
+        SMTConfig config;
+        const char * msg = "ok";
+        config.setOption(SMTConfig::o_produce_inter, SMTOption(true), msg);
+        config.setSimplifyInterpolant(4);
+        MainSolver solver(logic, config, "Less-than reachability checker");
+        PTRef previousLessThanTransition = getLessThanPower(power - 1);
+        PTRef previousExactTransition = getExactPower(power - 1);
+        PTRef translatedLessThanTransition = getNextVersion(previousLessThanTransition);
+        PTRef currentToNextNextPreviousLessThanTransition = shiftOnlyNextVars(previousLessThanTransition);
+        PTRef twoStepTransition = logic.mkOr(
+            currentToNextNextPreviousLessThanTransition,
+            logic.mkAnd(previousExactTransition, translatedLessThanTransition)
+        );
+        // TODO: assert from and to are current-state formulas
+        PTRef goal = getNextVersion(to, 2);
+        solver.insertFormula(twoStepTransition);
+        solver.insertFormula(logic.mkAnd(from, goal));
+        auto res = solver.check();
+        if (res == s_False) {
+            auto itpContext = solver.getInterpolationContext();
+            vec<PTRef> itps;
+            ipartitions_t mask = 1;
+            itpContext->getSingleInterpolant(itps, mask);
+            assert(itps.size() == 1);
+            PTRef itp = itps[0];
+            // replace next-next variables with next-variables
+            itp = cleanInterpolant(itp);
+            storeLessThanPower(power, itp);
+            return AcceleratedBmc::ReachabilityResult::UNREACHABLE;
+        } else if (res == s_True) {
+            auto model = solver.getModel();
+            if (model->evaluate(currentToNextNextPreviousLessThanTransition) == logic.getTerm_true()) {
+                // First disjunct was responsible for the positive answer, check it
+                auto subQueryRes = reachabilityQueryLessThan(from, to, power - 1);
+                if (isReachable(subQueryRes)) {
+                    return subQueryRes;
+                } else {
+                    assert(isUnreachable(subQueryRes));
+                    assert(getLessThanPower(power - 1) != previousLessThanTransition);
+                    continue;
+                }
+            } else {
+                // Second disjunct was responsible for the positive answer
+                assert(model->evaluate(logic.mkAnd(previousExactTransition, translatedLessThanTransition)) ==
+                       logic.getTerm_true());
+                // Create the three states corresponding to current, next and next-next variables from the query
+                auto currentVars = getStateVars(0);
+                auto nextVars = getStateVars(1);
+                auto nextnextVars = getStateVars(2);
+                PTRef currentState = extractStateFromModel(currentVars, *model);
+                PTRef nextState = getNextVersion(extractStateFromModel(nextVars, *model), -1);
+                PTRef nextnextState = getNextVersion(extractStateFromModel(nextnextVars, *model), -2);
+                // check the reachability using lower level abstraction
+                auto subQueryRes = reachabilityQueryExact(currentState, nextState, power - 1);
+                if (isUnreachable(subQueryRes)) {
+                    assert(getExactPower(power - 1) != previousExactTransition);
+                    continue; // We need to re-check this level with refined abstraction
+                }
+                // here the first half of the found path is feasible, check the second half
+                subQueryRes = reachabilityQueryLessThan(nextState, nextnextState, power - 1);
+                if (isUnreachable(subQueryRes)) {
+                    assert(getExactPower(power - 1) != translatedLessThanTransition);
+                    continue; // We need to re-check this level with refined abstraction
+                }
+                assert(isReachable(subQueryRes));
+                // both halves of the found path are feasible => this path is feasible!
+                return ReachabilityResult::REACHABLE;
+            }
         } else {
             throw std::logic_error("Accelerated BMC: Unexpected situation checking reachability");
         }
@@ -172,6 +290,7 @@ PTRef AcceleratedBmc::extractStateFromModel(vec<PTRef> const & vars, Model & mod
     return logic.mkAnd(eqs);
 }
 
+// TODO: unify cleanInterpolant and shiftOnlyNextVars. They are dual to each other and very similar
 PTRef AcceleratedBmc::cleanInterpolant(PTRef itp) {
     TermUtils utils(logic);
     auto itpVars = utils.getVars(itp);
@@ -188,6 +307,24 @@ PTRef AcceleratedBmc::cleanInterpolant(PTRef itp) {
         subst.insert({nextnextVars[i], nextVars[i]});
     }
     return utils.varSubstitute(itp, subst);
+}
+
+PTRef AcceleratedBmc::shiftOnlyNextVars(PTRef fla) {
+    TermUtils utils(logic);
+    auto vars = utils.getVars(fla);
+    auto currentVars = getStateVars(0);
+    auto nextVars = getStateVars(1);
+    assert(std::all_of(vars.begin(), vars.end(), [&](PTRef var) {
+        return std::find(currentVars.begin(), currentVars.end(), var) != currentVars.end() or
+               std::find(nextVars.begin(), nextVars.end(), var) != nextVars.end();
+    }));
+    auto nextnextVars = getStateVars(2);
+    TermUtils::substitutions_map subst;
+    assert(nextVars.size() == nextnextVars.size());
+    for (int i = 0; i < nextVars.size(); ++i) {
+        subst.insert({nextVars[i], nextnextVars[i]});
+    }
+    return utils.varSubstitute(fla, subst);
 }
 
 void AcceleratedBmc::resetTransitionSystem(TransitionSystem const & system) {
@@ -215,6 +352,8 @@ void AcceleratedBmc::resetTransitionSystem(TransitionSystem const & system) {
     this->exactPowers.clear();
     exactPowers.push(logic.mkAnd(currentNextEqs));
     exactPowers.push(transition);
+    lessThanPowers.push(PTRef_Undef); // <0 does not make sense
+    lessThanPowers.push(exactPowers[0]); // <1 is just exact 0
 }
 
 PTRef AcceleratedBmc::getNextVersion(PTRef currentVersion, int shift) {
