@@ -16,12 +16,14 @@ class SystemType {
 
     std::vector<PTRef> stateVars;
     std::vector<PTRef> nextStateVars;
+    std::vector<PTRef> auxiliaryVars; // Allowed in the transition relation
 
     Logic & logic;
 
 public:
 
     SystemType(std::vector<SRef> stateVarTypes, Logic & logic);
+    SystemType(std::vector<SRef> stateVarTypes, std::vector<SRef> auxiliaryVarTypes, Logic & logic);
 
     bool isStateFormula(PTRef fla) const;
 
@@ -29,6 +31,7 @@ public:
 
     std::vector<PTRef> const & getStateVars() const { return stateVars; }
     std::vector<PTRef> const & getNextStateVars() const { return nextStateVars; }
+    std::vector<PTRef> const & getAuxiliaryVars() const { return auxiliaryVars; }
 };
 
 class TransitionSystemHelper {
@@ -80,7 +83,9 @@ public:
         query(badStates)
     {
         helper = std::unique_ptr<TransitionSystemHelper>(new TransitionSystemHelper(logic, *this->systemType));
-        assert(isWellFormed());
+        if (not isWellFormed()) {
+            throw std::logic_error("Transition system not created correctly");
+        }
     }
 
     PTRef getPathFormula(std::size_t unrollingNumber);
@@ -91,6 +96,7 @@ public:
 
     std::vector<PTRef> getStateVars() const;
     std::vector<PTRef> getNextStateVars() const;
+    std::vector<PTRef> getAuxiliaryVars() const;
 
 private:
     bool isWellFormed();

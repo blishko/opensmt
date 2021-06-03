@@ -36,17 +36,36 @@ std::unique_ptr<TransitionSystem> toTransitionSystem(ChcDirectedGraph const & gr
     PTRef pred = graph.getStateVersion(reversePostOrder[1]);
     vec<PTRef> vars = utils.getVarsFromPredicateInOrder(pred);
     vec<PTRef> nextVars = utils.getVarsFromPredicateInOrder(graph.getNextStateVersion(reversePostOrder[1]));
+    // We need to determine auxiliary variables from the loop edge
+    auto edges = graph.getEdges();
+    auto it = std::find_if(edges.begin(), edges.end(), [&](EId eid) {
+        return graph.getSource(eid) == reversePostOrder[1] and graph.getTarget(eid) == reversePostOrder[1];
+    });
+    assert(it != edges.end());
+    EId loopEdge = *it;
+    PTRef loopLabel = graph.getEdgeLabel(loopEdge);
+    auto allVars = TermUtils(logic).getVars(loopLabel);
+    vec<PTRef> graphAuxiliaryVars;
+    for (PTRef var : allVars) {
+        if (std::find(vars.begin(), vars.end(), var) == vars.end() and
+            std::find(nextVars.begin(), nextVars.end(), var) == nextVars.end()) {
+            graphAuxiliaryVars.push(var);
+        }
+    }
+    // Now we can continue building the transition system
     std::vector<SRef> stateVarTypes;
     std::transform(vars.begin(), vars.end(), std::back_inserter(stateVarTypes), [&logic](PTRef var){ return logic.getSortRef(var); });
-    auto systemType = std::unique_ptr<SystemType>(new SystemType(std::move(stateVarTypes), logic));
+    std::vector<SRef> auxVarTypes;
+    std::transform(graphAuxiliaryVars.begin(), graphAuxiliaryVars.end(), std::back_inserter(auxVarTypes), [&logic](PTRef var){ return logic.getSortRef(var); });
+    auto systemType = std::unique_ptr<SystemType>(new SystemType(std::move(stateVarTypes), std::move(auxVarTypes), logic));
     auto stateVars = systemType->getStateVars();
     auto nextStateVars = systemType->getNextStateVars();
+    auto auxiliaryVars = systemType->getAuxiliaryVars();
     assert(stateVars.size() == vars.size_());
     assert(nextStateVars.size() == nextVars.size_());
     PTRef init = PTRef_Undef;
     PTRef transitionRelation = PTRef_Undef;
     PTRef bad = PTRef_Undef;
-    auto edges = graph.getEdges();
     for (auto const & edge : edges) {
         VId source = graph.getSource(edge);
         VId target = graph.getTarget(edge);
@@ -68,6 +87,9 @@ std::unique_ptr<TransitionSystem> toTransitionSystem(ChcDirectedGraph const & gr
                            [](PTRef key, PTRef value) { return std::make_pair(key, value); });
 
             std::transform(nextVars.begin(), nextVars.end(), nextStateVars.begin(), std::inserter(subMap, subMap.end()),
+                           [](PTRef key, PTRef value) { return std::make_pair(key, value); });
+
+            std::transform(graphAuxiliaryVars.begin(), graphAuxiliaryVars.end(), auxiliaryVars.begin(), std::inserter(subMap, subMap.end()),
                            [](PTRef key, PTRef value) { return std::make_pair(key, value); });
             transitionRelation = utils.varSubstitute(fla, subMap);
 //            std::cout << logic.printTerm(transitionRelation) << std::endl;
