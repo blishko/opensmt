@@ -814,6 +814,24 @@ inline void multiplication(FastRational& dst, const FastRational& a, const FastR
         dst.setOnlyWordPartValid();
         return;
     }
+    if (a.wordPartValid() and b.mpqPartValid()) {
+        dst.ensure_mpq_memory_allocated();
+        mpz_mul_si(mpq_numref(dst.mpq), mpq_numref(b.mpq), a.num);
+        mpz_mul_ui(mpq_denref(dst.mpq), mpq_denref(b.mpq), a.den);
+        mpq_canonicalize(dst.mpq);
+        dst.state = State::MPQ_ALLOCATED_AND_VALID;
+        dst.try_fit_word();
+        return;
+    }
+    if (b.wordPartValid() and a.mpqPartValid()) {
+        dst.ensure_mpq_memory_allocated();
+        mpz_mul_si(mpq_numref(dst.mpq), mpq_numref(a.mpq), b.num);
+        mpz_mul_ui(mpq_denref(dst.mpq), mpq_denref(a.mpq), b.den);
+        mpq_canonicalize(dst.mpq);
+        dst.state = State::MPQ_ALLOCATED_AND_VALID;
+        dst.try_fit_word();
+        return;
+    }
     overflow:
     a.force_ensure_mpq_valid();
     b.force_ensure_mpq_valid();
@@ -978,6 +996,10 @@ inline void multiplicationAssign(FastRational& a, const FastRational& b) {
         return;
     }
     overflow:
+    static int counter = 0;
+    if (b.wordPartValid() and a.mpqPartValid()) {
+        printf("%d\n", ++counter);
+    }
     a.ensure_mpq_valid();
     b.force_ensure_mpq_valid();
     mpq_mul(a.mpq, a.mpq, b.mpq);
