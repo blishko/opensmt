@@ -833,6 +833,19 @@ inline void multiplication(FastRational& dst, const FastRational& a, const FastR
         return;
     }
     overflow:
+    if (a.wordPartValid() and b.wordPartValid()) {
+        dst.num = a.num;
+        dst.den = a.den;
+        dst.setWordPartValid();
+        dst.setMpqPartInvalid();
+        dst.ensure_mpq_valid();
+        mpz_mul_si(mpq_numref(dst.mpq), mpq_numref(dst.mpq), b.num);
+        mpz_mul_ui(mpq_denref(dst.mpq), mpq_denref(dst.mpq), b.den);
+        mpq_canonicalize(dst.mpq);
+        dst.state = State::MPQ_ALLOCATED_AND_VALID;
+        dst.try_fit_word();
+        return;
+    }
     a.force_ensure_mpq_valid();
     b.force_ensure_mpq_valid();
     dst.ensure_mpq_memory_allocated();
