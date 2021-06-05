@@ -695,7 +695,45 @@ inline void addition(FastRational& dst, const FastRational& a, const FastRationa
         assert(dst.isWellFormed());
         return;
     }
+    if (a.wordPartValid() and b.mpqPartValid()) {
+        dst.ensure_mpq_memory_allocated();
+        // denumerator: dst.den = a.den * b.den
+        mpz_mul_ui(mpq_denref(dst.mpq), mpq_denref(b.mpq), a.den);
+        // numerator: dst.num = a.num * b.den + a.den * b.num
+        mpz_mul_si(mpq_numref(dst.mpq), mpq_denref(b.mpq) , a.num);
+        mpz_addmul_ui(mpq_numref(dst.mpq), mpq_numref(b.mpq), a.den);
+        mpq_canonicalize(dst.mpq);
+        dst.state = dst.state = State::MPQ_ALLOCATED_AND_VALID;
+        dst.try_fit_word();
+        return;
+    }
+    if (b.wordPartValid() and a.mpqPartValid()) {
+        dst.ensure_mpq_memory_allocated();
+        // denumerator: dst.den = a.den * b.den
+        mpz_mul_ui(mpq_denref(dst.mpq), mpq_denref(a.mpq), b.den);
+        // numerator: dst.num = a.num * b.den + a.den * b.num
+        mpz_mul_si(mpq_numref(dst.mpq), mpq_denref(a.mpq) , b.num);
+        mpz_addmul_ui(mpq_numref(dst.mpq), mpq_numref(a.mpq), b.den);
+        mpq_canonicalize(dst.mpq);
+        dst.state = dst.state = State::MPQ_ALLOCATED_AND_VALID;
+        dst.try_fit_word();
+        return;
+    }
     overflow:
+//    if (a.wordPartValid() and b.wordPartValid()) {
+//        // This cannot be done easily using only mpq of dst (as in multiplication). So we also use one of the arguments.
+//        a.force_ensure_mpq_valid();
+//        dst.ensure_mpq_memory_allocated();
+//        // denumerator: dst.den = a.den * b.den
+//        mpz_mul_ui(mpq_denref(dst.mpq), mpq_denref(a.mpq), b.den);
+//        // numerator: dst.num = a.num * b.den + a.den * b.num
+//        mpz_mul_si(mpq_numref(dst.mpq), mpq_denref(a.mpq) , b.num);
+//        mpz_addmul_ui(mpq_numref(dst.mpq), mpq_numref(a.mpq), b.den);
+//        mpq_canonicalize(dst.mpq);
+//        dst.state = State::MPQ_ALLOCATED_AND_VALID;
+//        dst.try_fit_word();
+//        return;
+//    }
     a.force_ensure_mpq_valid();
     b.force_ensure_mpq_valid();
     dst.ensure_mpq_memory_allocated();
