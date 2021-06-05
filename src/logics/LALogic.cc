@@ -4,7 +4,6 @@
 #include "Global.h"
 #include "LA.h"
 #include "LALogic.h"
-#include "FastRational.h"
 #include "OsmtInternalException.h"
 #include "OsmtApiException.h"
 

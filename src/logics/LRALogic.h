@@ -26,13 +26,11 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define LRALOGIC_H
 #include "Logic.h"
 #include "LALogic.h"
-#include "Real.h"
 #include "SMTConfig.h"
 
 class LRALogic: public LALogic
 {
 protected:
-    vec<opensmt::Real*> reals;
     SymRef              sym_Real_ZERO;
     SymRef              sym_Real_ONE;
     SymRef              sym_Real_NEG;
@@ -68,9 +66,7 @@ protected:
 
 public:
     LRALogic();
-    ~LRALogic () {
-        for (int i = 0; i < reals.size(); i++) delete reals[i];
-    }
+    ~LRALogic() = default;
     virtual const char* getName() const override { return "QF_LRA"; }
     virtual const opensmt::Logic_t getLogic() const override { return opensmt::Logic_t::QF_LRA; }
     bool        isBuiltinFunction(SymRef sr) const override { return isRealDiv(sr) || LALogic::isBuiltinFunction(sr); }

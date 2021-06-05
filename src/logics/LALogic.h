@@ -2,6 +2,7 @@
 #define LALOGIC_H
 #include "Logic.h"
 #include "Number.h"
+
 class LANonLinearException : std::runtime_error
 {
 public:
@@ -46,7 +47,7 @@ protected:
 
 public:
     LALogic() = default;
-    ~LALogic() { for(int i = 0; i < numbers.size(); ++i) {delete numbers[i];}}
+    ~LALogic() { for(int i = 0; i < numbers.size(); ++i) { delete numbers[i]; } }
     bool             isBuiltinFunction(SymRef sr) const override;
     PTRef            insertTerm       (SymRef sym, vec<PTRef>& terms) override;
     virtual SRef     getSort_num      () const = 0;

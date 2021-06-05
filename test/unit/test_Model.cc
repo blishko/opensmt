@@ -61,7 +61,7 @@ TEST_F(LAModelTest, test_constants) {
 
     PTRef fortytwo = logic.mkConst(42);
     PTRef one = logic.mkConst(1);
-    PTRef zero = logic.mkConst(opensmt::Real(0));
+    PTRef zero = logic.mkConst(opensmt::Number(0));
     EXPECT_EQ(model->evaluate(fortytwo), fortytwo);
     EXPECT_EQ(model->evaluate(one), logic.getTerm_NumOne());
     EXPECT_EQ(model->evaluate(zero), logic.getTerm_NumZero());

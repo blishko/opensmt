@@ -35,6 +35,10 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "OsmtApiException.h"
 #include "ModelBuilder.h"
 #include "IteHandler.h"
+#include "LIATHandler.h"
+#include "LRATHandler.h"
+#include "LIALogic.h"
+#include "LRALogic.h"
 
 
 #include <thread>
