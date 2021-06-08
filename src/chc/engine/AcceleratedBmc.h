@@ -66,6 +66,7 @@ private:
     ReachabilityResult reachabilityQueryLessThan(PTRef from, PTRef to, unsigned short power);
 
     PTRef extractStateFromModel(vec<PTRef> const & vars, Model& model);
+    PTRef extractMidPoint(PTRef start, PTRef firstTransition, PTRef secondTransition, PTRef goal, Model& model);
 };
 
 
