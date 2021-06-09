@@ -38,7 +38,7 @@ namespace{
             BoundType type = bound.type;
             switch(type) {
                 case BoundType::EXACT:
-                    return logic.getTerm_true(); // This can be either "this.val == bound.val" or we can shortcut to True, since we know both have the same value in the model
+                    return logic.mkEq(val, bound.val);
                 case BoundType::LOWER:
                     return logic.mkNumLt(bound.val, val);
                 case BoundType::UPPER:
