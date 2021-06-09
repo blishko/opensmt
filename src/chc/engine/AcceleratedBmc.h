@@ -34,6 +34,12 @@ public:
 
     ~AcceleratedBmc() override = default;
 
+    struct QueryResult {
+        enum class ReachabilityResult {REACHABLE, UNREACHABLE};
+        ReachabilityResult result;
+        PTRef refinedTarget = PTRef_Undef;
+    };
+
 private:
     GraphVerificationResult solveTransitionSystem(TransitionSystem & system);
 
@@ -61,12 +67,13 @@ private:
     /* Shifts only next vars to next-next vars */
     PTRef shiftOnlyNextVars(PTRef transition);
 
-    enum class ReachabilityResult {REACHABLE, UNREACHABLE};
-    ReachabilityResult reachabilityQueryExact(PTRef from, PTRef to, unsigned short power);
-    ReachabilityResult reachabilityQueryLessThan(PTRef from, PTRef to, unsigned short power);
+    QueryResult reachabilityQueryExact(PTRef from, PTRef to, unsigned short power);
+    QueryResult reachabilityQueryLessThan(PTRef from, PTRef to, unsigned short power);
 
     PTRef extractStateFromModel(vec<PTRef> const & vars, Model& model);
     PTRef extractMidPoint(PTRef start, PTRef firstTransition, PTRef secondTransition, PTRef goal, Model& model);
+
+    PTRef refineTarget(PTRef start, PTRef transition, PTRef goal, Model& model);
 };
 
 
