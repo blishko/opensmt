@@ -110,6 +110,41 @@ VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
     }
 }
 
+AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityExactOneStep(PTRef from, PTRef to) {
+    // TODO: this solver can be persistent and used incrementally
+    QueryResult result;
+    SMTConfig config;
+    MainSolver solver(logic, config, "1-step checker");
+    solver.insertFormula(getExactPower(1));
+    PTRef goal = getNextVersion(to);
+    solver.insertFormula(logic.mkAnd(from, goal));
+    auto res = solver.check();
+    if (res == s_True) {
+        result.result = QueryResult::ReachabilityResult::REACHABLE;
+        return result;
+    } else if (res == s_False) {
+        result.result = QueryResult::ReachabilityResult::UNREACHABLE;
+        return result;
+    }
+    throw std::logic_error("Accelerated BMC: Unexpected situation checking reachability");
+}
+
+AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityExactZeroStep(PTRef from, PTRef to) {
+    QueryResult result;
+    SMTConfig config;
+    MainSolver solver(logic, config, "0-step checker");
+    solver.insertFormula(logic.mkAnd(from, to));
+    auto res = solver.check();
+    if (res == s_True) {
+        result.result = QueryResult::ReachabilityResult::REACHABLE;
+        return result;
+    } else if (res == s_False) {
+        result.result = QueryResult::ReachabilityResult::UNREACHABLE;
+        return result;
+    }
+    throw std::logic_error("Accelerated BMC: Unexpected situation checking reachability");
+}
+
 /*
  * Check if 'to' is reachable from 'from' (these are state formulas) in exactly 2^n steps (n is 'power').
  * We do this using the (n-1)th abstraction of the transition relation and check 2-step reachability in this abstraction.
@@ -119,26 +154,10 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
 //    std::cout << "Checking exact reachability on level " << power << std::endl;
 //        std::cout << "Checking exact reachability on level " << power << " from " << logic.printTerm(from) << " to " << logic.printTerm(to) << std::endl;
     assert(power >= 1);
-    QueryResult result;
     if (power == 1) { // Basic check with real transition relation
-        // TODO: this solver can be persistent and used incrementally
-        SMTConfig config;
-        MainSolver solver(logic, config, "1-step checker");
-        solver.insertFormula(getExactPower(1));
-        PTRef goal = getNextVersion(to);
-        solver.insertFormula(logic.mkAnd(from, goal));
-        auto res = solver.check();
-        if (res == s_True) {
-            result.result = QueryResult::ReachabilityResult::REACHABLE;
-            auto model = solver.getModel();
-            result.refinedTarget = getNextVersion(refineTarget(from, getExactPower(1), goal, *model), -1);
-            return result;
-        } else if (res == s_False) {
-            result.result = QueryResult::ReachabilityResult::UNREACHABLE;
-            return result;
-        }
-        throw std::logic_error("Accelerated BMC: Unexpected situation checking reachability");
+        return reachabilityExactOneStep(from, to);
     }
+    QueryResult result;
     PTRef goal = getNextVersion(to, 2);
     while(true) {
         SMTConfig config;
@@ -169,6 +188,11 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
             return result;
         } else if (res == s_True) {
             auto model = solver.getModel();
+            if (power == 2) { // Base case, the 2 steps of the exact transition relation have been used
+                result.result = QueryResult::ReachabilityResult::REACHABLE;
+                result.refinedTarget = getNextVersion(refineTwoStepTarget(from, twoStepTransition, goal, *model), -2);
+                return result;
+            }
             // Create the three states corresponding to current, next and next-next variables from the query
 //            PTRef modelMidpoint = getNextVersion(extractStateFromModel(getStateVars(1), *model), -1);
             PTRef nextState = getNextVersion(extractMidPoint(from, previousTransition, translatedPreviousTransition, goal, *model), -1);
@@ -181,6 +205,7 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
                 continue; // We need to re-check this level with refined abstraction
             } else {
                 assert(isReachable(subQueryRes));
+                // TODO: check that this is really a subset of the original midpoint
                 nextState = extractReachableTarget(subQueryRes);
                 if (nextState == PTRef_Undef) {
                     throw std::logic_error("Refined reachable target not set in subquery!");
@@ -211,21 +236,10 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
 //    std::cout << "Checking less-than reachability on level " << power << std::endl;
 //        std::cout << "Checking less-than reachability on level " << power << " from " << logic.printTerm(from) << " to " << logic.printTerm(to) << std::endl;
     assert(power >= 1);
-    QueryResult result;
     if (power == 1) {
-        SMTConfig config;
-        MainSolver solver(logic, config, "0-step checker");
-        solver.insertFormula(logic.mkAnd(from, to));
-        auto res = solver.check();
-        if (res == s_True) {
-            result.result = QueryResult::ReachabilityResult::REACHABLE;
-            return result;
-        } else if (res == s_False) {
-            result.result = QueryResult::ReachabilityResult::UNREACHABLE;
-            return result;
-        }
-        throw std::logic_error("Accelerated BMC: Unexpected situation checking reachability");
+        return reachabilityExactZeroStep(from, to);
     }
+    QueryResult result;
     assert(power >= 2);
     PTRef goal = getNextVersion(to, 2);
     while(true) {
@@ -263,6 +277,11 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
             auto model = solver.getModel();
             if (model->evaluate(currentToNextNextPreviousLessThanTransition) == logic.getTerm_true()) {
                 // First disjunct was responsible for the positive answer, check it
+                if (power == 2) { // This means the goal is reachable in 0 steps, no need to re-check anythin
+                    result.result = AcceleratedBmc::QueryResult::ReachabilityResult::REACHABLE;
+                    result.refinedTarget = logic.mkAnd(from, to); // TODO: check if this is needed
+                    return result;
+                }
                 auto subQueryRes = reachabilityQueryLessThan(from, to, power - 1);
                 if (isReachable(subQueryRes)) {
                     return subQueryRes;
@@ -274,6 +293,12 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
             } else {
                 // Second disjunct was responsible for the positive answer
                 assert(model->evaluate(logic.mkAnd(previousExactTransition, translatedLessThanTransition)) == logic.getTerm_true());
+                if (power == 2) { // Since it was not reachable in 0 steps (checked above), here it means it was reachable in exactly 1 step
+                    result.result = QueryResult::ReachabilityResult::REACHABLE;
+                    // TODO: this could be simplified, but I need refineOneStepTarget
+                    result.refinedTarget = getNextVersion(refineTwoStepTarget(from, logic.mkAnd(previousExactTransition, translatedLessThanTransition), goal, *model), -2);
+                    return result;
+                }
                 PTRef nextState = getNextVersion(extractMidPoint(from, previousExactTransition, translatedLessThanTransition, goal, *model), -1);
                 // check the reachability using lower level abstraction
                 auto subQueryRes = reachabilityQueryExact(from, nextState, power - 1);
@@ -444,17 +469,17 @@ PTRef AcceleratedBmc::extractMidPoint(PTRef start, PTRef firstTransition, PTRef 
     return midPoint;
 }
 
-PTRef AcceleratedBmc::refineTarget(PTRef start, PTRef transition, PTRef goal, Model & model) {
+PTRef AcceleratedBmc::refineTwoStepTarget(PTRef start, PTRef twoSteptransition, PTRef goal, Model & model) {
     ModelBasedProjection mbp(logic);
-    PTRef transitionQuery = logic.mkAnd({start, transition, goal});
+    PTRef transitionQuery = logic.mkAnd({start, twoSteptransition, goal});
     assert(model.evaluate(transitionQuery) == logic.getTerm_true());
-    auto nextStateVars = getStateVars(1);
+    auto nextnextStateVars = getStateVars(2);
     TermUtils utils(logic);
     auto vars = utils.getVars(transitionQuery);
     vec<PTRef> toEliminate;
     for (PTRef var : vars) {
-        auto it = std::find(nextStateVars.begin(), nextStateVars.end(), var);
-        if (it == nextStateVars.end()) {
+        auto it = std::find(nextnextStateVars.begin(), nextnextStateVars.end(), var);
+        if (it == nextnextStateVars.end()) {
             toEliminate.push(var);
         }
     }
