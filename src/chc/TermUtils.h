@@ -121,6 +121,8 @@ public:
         }
         return root;
     }
+
+    PTRef toNNF(PTRef fla);
 };
 
 class LATermUtils {
