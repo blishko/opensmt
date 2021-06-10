@@ -153,13 +153,16 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityExactZeroStep(PTRef from
 AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, PTRef to, unsigned short power) {
 //    std::cout << "Checking exact reachability on level " << power << std::endl;
 //        std::cout << "Checking exact reachability on level " << power << " from " << logic.printTerm(from) << " to " << logic.printTerm(to) << std::endl;
+//    std::cout << "Checking exact reachability on level " << power << " from " << from.x << " to " << to.x << std::endl;
     assert(power >= 1);
     if (power == 1) { // Basic check with real transition relation
         return reachabilityExactOneStep(from, to);
     }
     QueryResult result;
     PTRef goal = getNextVersion(to, 2);
+//    unsigned counter = 0;
     while(true) {
+//        std::cout << "Exact: Iteration " << ++counter << " on level " << power << std::endl;
         SMTConfig config;
         const char * msg = "ok";
         config.setOption(SMTConfig::o_produce_inter, SMTOption(true), msg);
@@ -242,7 +245,9 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
     QueryResult result;
     assert(power >= 2);
     PTRef goal = getNextVersion(to, 2);
+//    unsigned counter = 0;
     while(true) {
+//        std::cout << "Less-than: Iteration " << ++counter << " on level " << power << std::endl;
         SMTConfig config;
         const char * msg = "ok";
         config.setOption(SMTConfig::o_produce_inter, SMTOption(true), msg);
@@ -407,6 +412,11 @@ void AcceleratedBmc::resetTransitionSystem(TransitionSystem const & system) {
     }
     this->transition = utils.varSubstitute(system.getTransition(), substMap);
     this->transition = utils.toNNF(this->transition);
+//    std::cout << "Before simplifications: " << transition.x << std::endl;
+    this->transition = ::rewriteMaxArityAggresive(logic, this->transition);
+//    std::cout << "After simplifications 1: " << transition.x << std::endl;
+    this->transition = ::simplifyUnderAssignment_Aggressive(this->transition, logic);
+//    std::cout << "After simplifications 2: " << transition.x << std::endl;
     this->exactPowers.clear();
     exactPowers.push(logic.mkAnd(currentNextEqs));
     exactPowers.push(transition);
@@ -414,6 +424,7 @@ void AcceleratedBmc::resetTransitionSystem(TransitionSystem const & system) {
     lessThanPowers.push(exactPowers[0]); // <1 is just exact 0
 //    std::cout << "Init: " << logic.printTerm(init) << std::endl;
 //    std::cout << "Transition: " << logic.printTerm(transition) << std::endl;
+//    std::cout << "Transition: "; TermUtils(logic).printTermWithLets(std::cout, transition); std::cout << std::endl;
 //    std::cout << "Query: " << logic.printTerm(query) << std::endl;
 }
 
