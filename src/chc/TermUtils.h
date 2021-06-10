@@ -140,6 +140,8 @@ public:
      * @return term 's' such that 'var = s' is equivalent to 'zeroTerm = 0'
      */
     PTRef expressZeroTermFor(PTRef zeroTerm, PTRef var);
+
+    bool atomContainsVar(PTRef atom, PTRef var);
 };
 
 class TimeMachine {

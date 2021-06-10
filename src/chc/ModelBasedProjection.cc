@@ -151,37 +151,9 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
             }
         }
     }
-    TermUtils utils(*lalogic);
-    auto containsVar = [var, utils](PtAsgn lit) {
-        auto vars = utils.getVars(lit.tr);
-        return std::find(vars.begin(), vars.end(), var) != vars.end();
-        /*PTRef atom = lit.tr;
-        if (lalogic->isBoolAtom(atom)) { return false;}
-        assert(lalogic->isNumLeq(atom) || lalogic->isNumEq(atom));
-        if (lalogic->isNumEq(atom)) {
-            atom = lalogic->mkNumLeq(lalogic->getPterm(atom)[0], lalogic->getPterm(atom)[1]);
-        }
-        // inequalities have form "constant <= term"
-        PTRef term = lalogic->getPterm(atom)[1];
-        assert(lalogic->isLinearTerm(term));
-        auto getVarFromFactor = [lalogic](PTRef factor) {
-            PTRef fvar, constant;
-            lalogic->splitTermToVarAndConst(factor, fvar, constant);
-            return fvar;
-        };
-        if (lalogic->isLinearFactor(term)) {
-            return getVarFromFactor(term) == var;
-        } else {
-            assert(lalogic->isNumPlus(term));
-            for (int i = 0; i < lalogic->getPterm(term).size(); ++i) {
-                PTRef factor = lalogic->getPterm(term)[i];
-                PTRef factorVar = getVarFromFactor(factor);
-                if (factorVar == var) { return true; }
-            }
-            return false;
-        }
-        assert(false); // Not reachable
-         */
+    LATermUtils utils(*lalogic);
+    auto containsVar = [var, &utils](PtAsgn lit) {
+        return utils.atomContainsVar(lit.tr, var);
     };
     // split the literals to those containing var and those not containing var
     auto interestingEnd = std::partition(literals.begin(), literals.end(), containsVar);
