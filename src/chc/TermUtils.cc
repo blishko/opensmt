@@ -152,3 +152,115 @@ void TermUtils::printTermWithLets(ostream & out, PTRef root) {
 
     out << strRepr.at(root) << std::string(letCount, ')');
 }
+
+class NNFTransformer {
+    Logic & logic;
+
+    std::unordered_map<PTRef, PTRef, PTRefHash> transformed;
+    std::unordered_map<PTRef, PTRef, PTRefHash> negated;
+
+    PTRef transform(PTRef);
+    PTRef negate(PTRef);
+
+public:
+    NNFTransformer(Logic & logic) : logic(logic) {}
+
+    PTRef toNNF(PTRef fla) { return transform(fla); };
+};
+
+PTRef NNFTransformer::transform(PTRef fla) {
+    auto it = transformed.find(fla);
+    if (it != transformed.end()) {
+        return it->second;
+    }
+    if (logic.isAtom(fla)) {
+        transformed.insert({fla, fla});
+        return fla;
+    }
+    if (logic.isAnd(fla)) {
+        auto size = logic.getPterm(fla).size();
+        vec<PTRef> nargs;
+        nargs.capacity(size);
+        for (int i = 0; i < size; ++i) {
+            PTRef child = logic.getPterm(fla)[i];
+            nargs.push(transform(child));
+        }
+        PTRef nfla = logic.mkAnd(nargs);
+        transformed.insert({fla, nfla});
+        return nfla;
+    }
+    if (logic.isOr(fla)) {
+        auto size = logic.getPterm(fla).size();
+        vec<PTRef> nargs;
+        nargs.capacity(size);
+        for (int i = 0; i < size; ++i) {
+            PTRef child = logic.getPterm(fla)[i];
+            nargs.push(transform(child));
+        }
+        PTRef nfla = logic.mkOr(nargs);
+        transformed.insert({fla, nfla});
+        return nfla;
+    }
+    if (logic.isNot(fla)) {
+        PTRef npos = transform(logic.getPterm(fla)[0]);
+        PTRef nfla = negate(npos);
+        transformed.insert({fla, nfla});
+        return nfla;
+    }
+    assert(false);
+    throw std::logic_error("Unexpected formula in NNF transformation");
+}
+
+PTRef NNFTransformer::negate(PTRef fla) {
+    assert(logic.isAnd(fla) or logic.isOr(fla) or logic.isAtom(fla) or (logic.isNot(fla) and logic.isAtom(logic.getPterm(fla)[0])));
+    auto it = negated.find(fla);
+    if (it != negated.end()) {
+        return it->second;
+    }
+    if (logic.isNot(fla)) {
+        assert(logic.isAtom(logic.getPterm(fla)[0]));
+        PTRef nfla = logic.getPterm(fla)[0];
+        negated.insert({fla, nfla});
+        return nfla;
+    }
+    if (logic.isAtom(fla)) {
+        PTRef nfla = logic.mkNot(fla);
+        negated.insert({fla, nfla});
+        return nfla;
+    }
+    if (logic.isAnd(fla)) {
+        auto size = logic.getPterm(fla).size();
+        vec<PTRef> nargs;
+        nargs.capacity(size);
+        for (int i = 0; i < size; ++i) {
+            PTRef child = logic.getPterm(fla)[i];
+            nargs.push(negate(child));
+        }
+        PTRef nfla = logic.mkOr(nargs);
+        transformed.insert({fla, nfla});
+        return nfla;
+    }
+    if (logic.isOr(fla)) {
+        auto size = logic.getPterm(fla).size();
+        vec<PTRef> nargs;
+        nargs.capacity(size);
+        for (int i = 0; i < size; ++i) {
+            PTRef child = logic.getPterm(fla)[i];
+            nargs.push(negate(child));
+        }
+        PTRef nfla = logic.mkAnd(nargs);
+        transformed.insert({fla, nfla});
+        return nfla;
+    }
+    assert(false);
+    throw std::logic_error("Unexpected formula in NNF transformation");
+}
+
+
+PTRef TermUtils::toNNF(PTRef fla) {
+    if (not logic.hasSortBool(fla)) {
+        throw std::invalid_argument("toNNF called with non-boolean formula!");
+    }
+    NNFTransformer nnfTransformer(logic);
+    return nnfTransformer.toNNF(fla);
+}
