@@ -264,3 +264,32 @@ PTRef TermUtils::toNNF(PTRef fla) {
     NNFTransformer nnfTransformer(logic);
     return nnfTransformer.toNNF(fla);
 }
+
+bool LATermUtils::atomContainsVar(PTRef atom, PTRef var) {
+    if (logic.isBoolAtom(atom)) { return false;}
+    assert(logic.isNumLeq(atom) || logic.isNumEq(atom));
+    if (logic.isNumEq(atom)) {
+        atom = logic.mkNumLeq(logic.getPterm(atom)[0], logic.getPterm(atom)[1]);
+    }
+    // inequalities have form "constant <= term"
+    PTRef term = logic.getPterm(atom)[1];
+    assert(logic.isLinearTerm(term));
+    auto getVarFromFactor = [this](PTRef factor) {
+        PTRef fvar, constant;
+        logic.splitTermToVarAndConst(factor, fvar, constant);
+        return fvar;
+    };
+    if (logic.isLinearFactor(term)) {
+        return getVarFromFactor(term) == var;
+    } else {
+        assert(logic.isNumPlus(term));
+        for (int i = 0; i < logic.getPterm(term).size(); ++i) {
+            PTRef factor = logic.getPterm(term)[i];
+            PTRef factorVar = getVarFromFactor(factor);
+            if (factorVar == var) { return true; }
+        }
+        return false;
+    }
+    assert(false); // Not reachable
+    throw std::logic_error("Unexpected situation in util method LATermUtils::atomContainsVar");
+}
