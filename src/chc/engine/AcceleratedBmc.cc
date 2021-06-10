@@ -369,7 +369,9 @@ void AcceleratedBmc::resetTransitionSystem(TransitionSystem const & system) {
         substMap.insert({var, versionedVar});
     }
     this->init = utils.varSubstitute(system.getInit(), substMap);
+    this->init = utils.toNNF(this->init);
     this->query = utils.varSubstitute(system.getQuery(), substMap);
+    this->query = utils.toNNF(this->query);
     auto nextStateVars = system.getNextStateVars();
     vec<PTRef> currentNextEqs;
     assert(nextStateVars.size() == stateVars.size());
@@ -379,6 +381,7 @@ void AcceleratedBmc::resetTransitionSystem(TransitionSystem const & system) {
         currentNextEqs.push(logic.mkEq(stateVariables[i], nextStateVersioned));
     }
     this->transition = utils.varSubstitute(system.getTransition(), substMap);
+    this->transition = utils.toNNF(this->transition);
     this->exactPowers.clear();
     exactPowers.push(logic.mkAnd(currentNextEqs));
     exactPowers.push(transition);
