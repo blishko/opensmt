@@ -70,10 +70,13 @@ private:
     QueryResult reachabilityQueryExact(PTRef from, PTRef to, unsigned short power);
     QueryResult reachabilityQueryLessThan(PTRef from, PTRef to, unsigned short power);
 
+    QueryResult reachabilityExactOneStep(PTRef from, PTRef to);
+    QueryResult reachabilityExactZeroStep(PTRef from, PTRef to);
+
     PTRef extractStateFromModel(vec<PTRef> const & vars, Model& model);
     PTRef extractMidPoint(PTRef start, PTRef firstTransition, PTRef secondTransition, PTRef goal, Model& model);
 
-    PTRef refineTarget(PTRef start, PTRef transition, PTRef goal, Model& model);
+    PTRef refineTwoStepTarget(PTRef start, PTRef transition, PTRef goal, Model& model);
 };
 
 
