@@ -8,6 +8,8 @@
 #include "TreeOps.h"
 #include "TermUtils.h"
 
+#include <memory>
+
 
 namespace{
     enum class BoundType {EXACT, LOWER, UPPER};
