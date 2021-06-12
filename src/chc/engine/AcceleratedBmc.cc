@@ -63,6 +63,81 @@ public:
     }
 };
 
+class SolverWrapperIncremental : public SolverWrapper {
+    Logic & logic;
+    SMTConfig config;
+    sstat lastResult = s_Undef;
+    std::unique_ptr<MainSolver> solver;
+
+    unsigned allformulasInserted = 0;
+    ipartitions_t mask = 0;
+    bool pushed = false;
+
+public:
+    SolverWrapperIncremental(Logic & logic, PTRef transition) : logic(logic) {
+//        std::cout << "Transition: " << logic.printTerm(transition) << std::endl;
+        this->transition = transition;
+        const char * msg = "ok";
+        config.setOption(SMTConfig::o_produce_models, SMTOption(true), msg);
+        config.setOption(SMTConfig::o_produce_inter, SMTOption(true), msg);
+        config.setSimplifyInterpolant(4);
+        config.setLRAInterpolationAlgorithm(itp_lra_alg_decomposing_strong);
+        solver.reset(new MainSolver(logic, config, "incremental reachability checker"));
+        solver->insertFormula(transition);
+        opensmt::setbit(mask, allformulasInserted++);
+    }
+
+    ReachabilityResult checkConsistent(PTRef query) override {
+//        std::cout << "Query: " << logic.printTerm(query) << std::endl;
+        assert(not pushed);
+        solver->push();
+        pushed = true;
+        solver->insertFormula(query);
+        ++allformulasInserted;
+        lastResult = solver->check();
+        if (lastResult == s_False) {
+            return ReachabilityResult::UNREACHABLE;
+        } else if (lastResult == s_True) {
+            return ReachabilityResult::REACHABLE;
+        } else {
+            throw std::logic_error("Unexpected solver result in checking reachability!");
+        }
+    }
+
+    void strenghtenTransition(PTRef nTransition) override {
+        assert(not pushed);
+        solver->insertFormula(nTransition);
+        opensmt::setbit(mask, allformulasInserted++);
+//        std::cout << "Current number of formulas inserted: " << allformulasInserted << std::endl;
+    }
+
+    std::unique_ptr<Model> lastQueryModel() override {
+        if (lastResult != s_True or not pushed) {
+            throw std::logic_error("Invalid call for obtaining a model from solver");
+        }
+        auto model = solver->getModel();
+        solver->pop();
+        pushed = false;
+        return std::move(model);
+    }
+
+    PTRef lastQueryTransitionInterpolant() override {
+        if (lastResult != s_False or not pushed) {
+            throw std::logic_error("Invalid call for obtaining an interpolant from solver");
+        }
+        auto itpContext = solver->getInterpolationContext();
+        vec<PTRef> itps;
+//        std::cout << "Current mask: "  << mask << std::endl;
+        itpContext->getSingleInterpolant(itps, mask);
+        assert(itps.size() == 1);
+        PTRef itp = itps[0];
+        solver->pop();
+        pushed = false;
+//        std::cout << logic.printTerm(itp) << std::endl;
+        return itp;
+    }
+};
+
 AcceleratedBmc::~AcceleratedBmc() {
     for (SolverWrapper* solver : reachabilitySolvers) {
         delete solver;
@@ -110,7 +185,8 @@ void AcceleratedBmc::storeExactPower(unsigned short power, PTRef tr) {
     reachabilitySolvers.growTo(power + 2, nullptr);
     PTRef nextLevelTransitionStrengthening = logic.mkAnd(tr, getNextVersion(tr));
     if (not reachabilitySolvers[power + 1]) {
-        reachabilitySolvers[power + 1] = new SolverWrapperSingleUse(logic, nextLevelTransitionStrengthening);
+        reachabilitySolvers[power + 1] = new SolverWrapperIncremental(logic, nextLevelTransitionStrengthening);
+//        reachabilitySolvers[power + 1] = new SolverWrapperSingleUse(logic, nextLevelTransitionStrengthening);
     } else {
         reachabilitySolvers[power + 1]->strenghtenTransition(nextLevelTransitionStrengthening);
     }
@@ -473,10 +549,12 @@ void AcceleratedBmc::resetTransitionSystem(TransitionSystem const & system) {
     this->transition = utils.varSubstitute(system.getTransition(), substMap);
     this->transition = utils.toNNF(this->transition);
 //    std::cout << "Before simplifications: " << transition.x << std::endl;
-    this->transition = ::rewriteMaxArityAggresive(logic, this->transition);
+    if (not logic.isAtom(this->transition)) {
+        this->transition = ::rewriteMaxArityAggresive(logic, this->transition);
 //    std::cout << "After simplifications 1: " << transition.x << std::endl;
-    this->transition = ::simplifyUnderAssignment_Aggressive(this->transition, logic);
+        this->transition = ::simplifyUnderAssignment_Aggressive(this->transition, logic);
 //    std::cout << "After simplifications 2: " << transition.x << std::endl;
+    }
     this->exactPowers.clear();
     storeExactPower(0, logic.mkAnd(currentNextEqs));
     storeExactPower(1, transition);
