@@ -116,14 +116,14 @@ namespace{
 ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef var, implicant_t implicant, Model & model) {
     assert(logic.isVar(var));
     // if the variable is boolean, simply remove it from implicant
-    if (logic.isBoolAtom(var)) {
+    if (logic.hasSortBool(var)) {
         auto it = std::find_if(implicant.begin(), implicant.end(), [var](PtAsgn literal) { return literal.tr == var; });
         if (it != implicant.end()) {
             it = implicant.erase(it);
             // the same boolean variable cannot be present twice in the implicant
             assert(std::find_if(it, implicant.end(), [var](PtAsgn literal) { return literal.tr == var; }) == implicant.end());
         }
-        return implicant;
+        return std::move(implicant);
     }
     LALogic * lalogic = dynamic_cast<LALogic *>(&logic);
     if (not lalogic or not lalogic->isNumVar(var)) {
@@ -256,18 +256,18 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
         if (lalogic->isNumEq(subResult)) { // special case, which we need to handle
             PTRef lhs = lalogic->getPterm(subResult)[0];
             PTRef rhs = lalogic->getPterm(subResult)[1];
-            newLiterals.insert(PtAsgn(lalogic->mkNumLeq(lhs, rhs), l_True));
-            newLiterals.insert(PtAsgn(lalogic->mkNumLeq(rhs, lhs), l_True));
+            newLiterals.push_back(PtAsgn(lalogic->mkNumLeq(lhs, rhs), l_True));
+            newLiterals.push_back(PtAsgn(lalogic->mkNumLeq(rhs, lhs), l_True));
         }
         else {
             PtAsgn newLiteral = lalogic->isNot(subResult) ? PtAsgn(lalogic->getPterm(subResult)[0], l_False)
                                                        : PtAsgn(subResult, l_True);
-            newLiterals.insert(newLiteral);
+            newLiterals.push_back(newLiteral);
         }
     }
     // don't forget the literals not containing the var to eliminate
-    newLiterals.insert(interestingEnd, literals.end());
-    return newLiterals;
+    newLiterals.insert(newLiterals.end(), interestingEnd, literals.end());
+    return std::move(newLiterals);
 }
 
 ModelBasedProjection::implicant_t ModelBasedProjection::getImplicant(PTRef fla, Model & model) {
@@ -277,23 +277,23 @@ ModelBasedProjection::implicant_t ModelBasedProjection::getImplicant(PTRef fla, 
 
         Model& model;
 
-        std::unordered_set<PtAsgn, PtAsgnHash> literals;
+        implicant_t literals;
 
     public:
         CollectImplicantConfig(Logic& logic, Model& model) : logic(logic), model(model) {}
 
-        std::unordered_set<PtAsgn, PtAsgnHash> getImplicant() const { return literals; }
+        implicant_t getImplicant() const { return std::move(literals); }
 
         void visit(PTRef term) override {
             assert(model.evaluate(term) == logic.getTerm_true());
             if (logic.isAtom(term)) {
-                literals.insert(PtAsgn(term, l_True));
+                literals.push_back(PtAsgn(term, l_True));
             } else if (logic.isNot(term)) {
                 PTRef child = logic.getPterm(term)[0];
                 if (not logic.isAtom(child)) {
                     throw std::logic_error("Formula must be in NNF for implicant extraction!");
                 }
-                literals.insert(PtAsgn(child, l_False));
+                literals.push_back(PtAsgn(child, l_False));
             }
         }
 

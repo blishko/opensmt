@@ -24,7 +24,7 @@ public:
     PTRef project(PTRef fla, vec<PTRef> const& varsToEliminate, Model& model);
 
 private:
-    using implicant_t = std::unordered_set<PtAsgn, PtAsgnHash>;
+    using implicant_t = std::vector<PtAsgn>;
 
     implicant_t projectSingleVar(PTRef var, implicant_t implicant, Model & model);
 
