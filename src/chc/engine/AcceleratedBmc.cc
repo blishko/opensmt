@@ -93,13 +93,13 @@ PTRef extractReachableTarget (AcceleratedBmc::QueryResult res) { return res.refi
 
 VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
     assert(power > 0);
-    // First compute the exact power using the concatenation of previous one
-    auto res = reachabilityQueryExact(init, query, power);
+    // First compute the <2^n transition relation using information from previous level;
+    auto res = reachabilityQueryLessThan(init, query, power);
     if (isReachable(res)) {
         return VerificationResult::UNSAFE;
     }
-    // Second compute the <2^n transition relation using information from previous level;
-    res = reachabilityQueryLessThan(init, query, power);
+    // Second compute the exact power using the concatenation of previous one
+    res = reachabilityQueryExact(init, query, power);
     if (isReachable(res)) {
         return VerificationResult::UNSAFE;
     } else if (isUnreachable(res)) {
