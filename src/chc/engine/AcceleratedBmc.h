@@ -9,6 +9,21 @@
 
 class TransitionSystem;
 
+enum class ReachabilityResult {REACHABLE, UNREACHABLE};
+
+class SolverWrapper {
+protected:
+    PTRef transition = PTRef_Undef;
+
+public:
+    virtual ~SolverWrapper() = default;
+    virtual ReachabilityResult checkConsistent(PTRef query) = 0;
+    virtual void strenghtenTransition(PTRef nTransition) = 0;
+    virtual std::unique_ptr<Model> lastQueryModel() = 0;
+    virtual PTRef lastQueryTransitionInterpolant() = 0;
+};
+
+
 class AcceleratedBmc : public Engine {
 
     Logic & logic;
@@ -17,6 +32,8 @@ class AcceleratedBmc : public Engine {
 
     vec<PTRef> exactPowers;
     vec<PTRef> lessThanPowers;
+
+    vec<SolverWrapper*> reachabilitySolvers;
 
     // Versioned representation of the transition system
     PTRef init;
@@ -32,10 +49,9 @@ public:
 
     GraphVerificationResult solve(const ChcDirectedGraph & system) override;
 
-    ~AcceleratedBmc() override = default;
+    ~AcceleratedBmc() override;
 
     struct QueryResult {
-        enum class ReachabilityResult {REACHABLE, UNREACHABLE};
         ReachabilityResult result;
         PTRef refinedTarget = PTRef_Undef;
     };
@@ -56,6 +72,8 @@ private:
 
     PTRef getLessThanPower(unsigned short power) const;
     void storeLessThanPower(unsigned short power, PTRef tr);
+
+    SolverWrapper* getExactReachabilitySolver(unsigned short power) const;
 
     PTRef getNextVersion(PTRef currentVersion, int);
     PTRef getNextVersion(PTRef currentVersion) { return getNextVersion(currentVersion, 1); };
