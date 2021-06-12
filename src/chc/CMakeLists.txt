@@ -18,4 +18,5 @@ target_sources(chc
     PRIVATE Normalizer.cc
     PRIVATE Witnesses.cc
     PRIVATE ModelBasedProjection.cc
+    PRIVATE QuantifierElimination.cc
     )
