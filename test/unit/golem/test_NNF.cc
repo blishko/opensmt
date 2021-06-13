@@ -11,10 +11,12 @@ protected:
     LRALogic logic;
     PTRef x;
     PTRef b;
+    PTRef a;
     PTRef zero;
     PTRef one;
     NNFTest() {
         x = logic.mkNumVar("x");
+        a = logic.mkBoolVar("a");
         b = logic.mkBoolVar("b");
         zero = logic.getTerm_NumZero();
         one = logic.getTerm_NumOne();
@@ -41,4 +43,14 @@ TEST_F(NNFTest, test_NegatedDisjunction) {
     PTRef fla = logic.mkNot(disj);
     PTRef nnf = TermUtils(logic).toNNF(fla);
     ASSERT_EQ(nnf, logic.mkAnd(logic.mkNot(atom), logic.mkNot(b)));
+}
+
+TEST_F(NNFTest, test_BoolEquality) {
+    PTRef eq = logic.mkEq(a,b);
+    PTRef nnf = TermUtils(logic).toNNF(eq);
+    ASSERT_NE(nnf, eq);
+    EXPECT_EQ(nnf, logic.mkAnd(
+        logic.mkOr(a, logic.mkNot(b)),
+        logic.mkOr(b, logic.mkNot(a))
+    ));
 }
