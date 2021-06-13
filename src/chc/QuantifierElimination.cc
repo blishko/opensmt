@@ -41,8 +41,10 @@ PTRef QuantifierElimination::eliminate(PTRef fla, PTRef var) {
         }
     }
     PTRef result = logic.mkOr(projections);
-    result = ::rewriteMaxArityAggresive(logic, result);
-    result = ::simplifyUnderAssignment_Aggressive(result, logic);
-    // TODO: more simplifications?
+    if (not logic.isAtom(result)) {
+        result = ::rewriteMaxArityAggresive(logic, result);
+        result = ::simplifyUnderAssignment_Aggressive(result, logic);
+        // TODO: more simplifications?
+    }
     return result;
 }
