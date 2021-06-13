@@ -207,6 +207,20 @@ PTRef NNFTransformer::transform(PTRef fla) {
         transformed.insert({fla, nfla});
         return nfla;
     }
+    if (logic.getSymRef(fla) == logic.getSym_eq()) { // Boolean equality
+        // a <=> b iff (~a or b) and (~b or a)
+        assert(logic.getPterm(fla).size() == 2);
+        PTRef firstTransformed = transform(logic.getPterm(fla)[0]);
+        PTRef secondTransformed = transform(logic.getPterm(fla)[1]);
+        PTRef firstTransformNegated = negate(firstTransformed);
+        PTRef secondTransformNegated = negate(secondTransformed);
+        PTRef nfla = logic.mkAnd(
+            logic.mkOr(firstTransformNegated, secondTransformed),
+            logic.mkOr(secondTransformNegated, firstTransformed)
+        );
+        transformed.insert({fla, nfla});
+        return nfla;
+    }
     assert(false);
     throw std::logic_error("Unexpected formula in NNF transformation");
 }
