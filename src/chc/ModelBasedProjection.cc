@@ -270,7 +270,58 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
     return std::move(newLiterals);
 }
 
+namespace{
+void collectImplicant(Logic & logic, PTRef fla, Model & model, std::vector<char> & processed, std::vector<PtAsgn>& literals) {
+    auto id = Idx(logic.getPterm(fla).getId());
+    if (id >= processed.size()) {
+        throw std::logic_error("Should not happen!");
+    }
+    if (processed[id]) { return; }
+    processed[id] = 1;
+    PTRef trueTerm = logic.getTerm_true();
+    assert(model.evaluate(fla) == trueTerm);
+    if (logic.isAtom(fla)) {
+        literals.push_back(PtAsgn(fla, l_True));
+        return;
+    }
+    if (logic.isAnd(fla)) {
+        // all children must be satisfied
+        auto size = logic.getPterm(fla).size();
+        for (int i = 0; i < size; ++i) {
+            PTRef child = logic.getPterm(fla)[i];
+            assert(model.evaluate(child) == trueTerm);
+            collectImplicant(logic, child, model, processed, literals);
+        }
+        return;
+    }
+    if (logic.isOr(fla)) {
+        // at least one child must be satisfied
+        auto size = logic.getPterm(fla).size();
+        for (int i = 0; i < size; ++i) {
+            PTRef child = logic.getPterm(fla)[i];
+            if (model.evaluate(child) == trueTerm) {
+                collectImplicant(logic, child, model, processed, literals);
+                return;
+            }
+        }
+        assert(false);
+        throw std::logic_error("Error in processing disjunction in collectImplicant!");
+    }
+    if (logic.isNot(fla)) {
+        PTRef child = logic.getPterm(fla)[0];
+        if (logic.isAtom(child)) {
+            assert(model.evaluate(child) == logic.getTerm_false());
+            literals.push_back(PtAsgn(child, l_False));
+            return;
+        }
+        throw std::logic_error("Formula is not in NNF in collectImplicant!");
+    }
+    throw std::logic_error("Unexpected connective in formula in collectImplicant");
+}
+}
+
 ModelBasedProjection::implicant_t ModelBasedProjection::getImplicant(PTRef fla, Model & model) {
+    /*
     class CollectImplicantConfig :public DefaultVisitorConfig {
     private:
         Logic & logic;
@@ -305,6 +356,13 @@ ModelBasedProjection::implicant_t ModelBasedProjection::getImplicant(PTRef fla, 
     TermVisitor<CollectImplicantConfig> collector(logic, config);
     collector.visit(fla);
     return config.getImplicant();
+    */
+    assert(model.evaluate(fla) == logic.getTerm_true());
+    std::vector<PtAsgn> literals;
+    std::vector<char> processed;
+    processed.resize(Idx(logic.getPterm(fla).getId()) + 1, 0);
+    collectImplicant(logic, fla, model, processed, literals);
+    return literals;
 }
 
 PTRef ModelBasedProjection::project(PTRef fla, const vec<PTRef> & varsToEliminate, Model & model) {
@@ -315,7 +373,8 @@ PTRef ModelBasedProjection::project(PTRef fla, const vec<PTRef> & varsToEliminat
                 or (elem.sgn == l_True and model.evaluate(elem.tr) == logic.getTerm_true()));
         }
     };
-    auto implicant = getImplicant(fla, model);
+    PTRef nnf = TermUtils(logic).toNNF(fla);
+    auto implicant = getImplicant(nnf, model);
 //    dumpImplicant(std::cout, implicant);
     checkImplicant(implicant);
     for (PTRef var : varsToEliminate) {
