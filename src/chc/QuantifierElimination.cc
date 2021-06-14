@@ -10,9 +10,12 @@
 #include "SMTConfig.h"
 #include "MainSolver.h"
 
-
 PTRef QuantifierElimination::eliminate(PTRef fla, PTRef var) {
-    if (not logic.isVar(var) or not logic.hasSortBool(fla)) {
+    return eliminate(fla, vec<PTRef>{var});
+}
+
+PTRef QuantifierElimination::eliminate(PTRef fla, vec<PTRef> const & vars) {
+    if (not std::all_of(vars.begin(), vars.end(), [this](PTRef var){ return logic.isVar(var); }) or not logic.hasSortBool(fla)) {
         throw std::invalid_argument("Invalid arguments to quantifier elimination");
     }
 
@@ -31,7 +34,7 @@ PTRef QuantifierElimination::eliminate(PTRef fla, PTRef var) {
         } else if (res == s_True) {
             auto model = solver.getModel();
             ModelBasedProjection mbp(logic);
-            PTRef projection = mbp.project(fla, {var}, *model);
+            PTRef projection = mbp.project(fla, vars, *model);
 //            std::cout << "Projection: " << logic.printTerm(projection) << std::endl;
             projections.push(projection);
             solver.push(); // to avoid processing the same formula over and over again
