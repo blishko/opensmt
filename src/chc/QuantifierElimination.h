@@ -18,7 +18,7 @@ public:
     QuantifierElimination(Logic & logic) : logic(logic) {}
 
     PTRef eliminate(PTRef fla, PTRef var);
-    PTRef eliminate(PTRef fla, vec<PTRef> vars);
+    PTRef eliminate(PTRef fla, vec<PTRef> const & vars);
 };
 
 
