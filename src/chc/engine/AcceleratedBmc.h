@@ -95,6 +95,8 @@ private:
     PTRef extractMidPoint(PTRef start, PTRef firstTransition, PTRef secondTransition, PTRef goal, Model& model);
 
     PTRef refineTwoStepTarget(PTRef start, PTRef transition, PTRef goal, Model& model);
+
+    bool verifyLessThanPower(unsigned short power);
 };
 
 
