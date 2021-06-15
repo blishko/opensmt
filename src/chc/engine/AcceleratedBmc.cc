@@ -620,7 +620,7 @@ PTRef AcceleratedBmc::extractMidPoint(PTRef start, PTRef firstTransition, PTRef 
 
 PTRef AcceleratedBmc::refineTwoStepTarget(PTRef start, PTRef twoSteptransition, PTRef goal, Model & model) {
     ModelBasedProjection mbp(logic);
-    PTRef transitionQuery = logic.mkAnd({start, twoSteptransition, goal});
+    PTRef transitionQuery = logic.mkAnd({start, twoSteptransition});
     assert(model.evaluate(transitionQuery) == logic.getTerm_true());
     auto nextnextStateVars = getStateVars(2);
     TermUtils utils(logic);
