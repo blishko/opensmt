@@ -241,6 +241,7 @@ PTRef extractReachableTarget (AcceleratedBmc::QueryResult res) { return res.refi
 
 VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
     assert(power > 0);
+//    std::cout << "Checking power " << power << std::endl;
     // First compute the <2^n transition relation using information from previous level;
     auto res = reachabilityQueryLessThan(init, query, power);
     if (isReachable(res)) {
@@ -326,10 +327,10 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
                     return result;
                 }
                 // Create the three states corresponding to current, next and next-next variables from the query
-//            PTRef modelMidpoint = getNextVersion(extractStateFromModel(getStateVars(1), *model), -1);
+//              PTRef modelMidpoint = getNextVersion(extractStateFromModel(getStateVars(1), *model), -1);
                 PTRef nextState = getNextVersion(extractMidPoint(from, previousTransition, translatedPreviousTransition, goal, *model), -1);
-//            std::cout << "Midpoint single point: " << logic.printTerm(modelMidpoint) << '\n';
-//            std::cout << "Midpoint from MBP: " << logic.printTerm(nextState) << std::endl;
+//              std::cout << "Midpoint single point: " << logic.printTerm(modelMidpoint) << '\n';
+//                std::cout << "Midpoint from MBP: " << logic.printTerm(nextState) << std::endl;
                 // check the reachability using lower level abstraction
                 auto subQueryRes = reachabilityQueryExact(from, nextState, power - 1);
                 if (isUnreachable(subQueryRes)) {
@@ -339,6 +340,7 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
                     assert(isReachable(subQueryRes));
                     // TODO: check that this is really a subset of the original midpoint
                     nextState = extractReachableTarget(subQueryRes);
+//                    std::cout << "Midpoint from MBP - part 2: " << logic.printTerm(nextState) << std::endl;
                     if (nextState == PTRef_Undef) {
                         throw std::logic_error("Refined reachable target not set in subquery!");
                     }
@@ -357,6 +359,9 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
             {
                 PTRef itp = solver->lastQueryTransitionInterpolant();
                 itp = cleanInterpolant(itp);
+//                std::cout << "Strenghtening representation of exact reachability on level " << power << " :";
+//                TermUtils(logic).printTermWithLets(std::cout, itp);
+//                std::cout << std::endl;
                 storeExactPower(power, itp);
                 result.result = ReachabilityResult::UNREACHABLE;
                 return result;
