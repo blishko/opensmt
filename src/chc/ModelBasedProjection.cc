@@ -376,7 +376,7 @@ PTRef ModelBasedProjection::project(PTRef fla, const vec<PTRef> & varsToEliminat
 
     vec<PTRef> tmp;
     varsToEliminate.copyTo(tmp);
-    auto boolEndIt = std::partition(tmp.begin(), tmp.end(), [&](PTRef var) {
+    auto boolEndIt = std::stable_partition(tmp.begin(), tmp.end(), [&](PTRef var) {
         assert(logic.isVar(var));
         return logic.hasSortBool(var);
     });
@@ -396,7 +396,9 @@ PTRef ModelBasedProjection::project(PTRef fla, const vec<PTRef> & varsToEliminat
     auto implicant = getImplicant(nnf, model);
 //    dumpImplicant(std::cout, implicant);
     checkImplicant(implicant);
-    for (PTRef var : varsToEliminate) {
+//    for (PTRef var : varsToEliminate) {
+    for (auto it = boolEndIt; it != tmp.end(); ++it) {
+        PTRef var = *it;
 //        std::cout << "Eliminating " << logic.printTerm(var) << std::endl;
         implicant = projectSingleVar(var, std::move(implicant), model);
 //        dumpImplicant(std::cout, implicant);
