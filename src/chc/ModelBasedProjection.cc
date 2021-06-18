@@ -373,6 +373,25 @@ PTRef ModelBasedProjection::project(PTRef fla, const vec<PTRef> & varsToEliminat
                 or (elem.sgn == l_True and model.evaluate(elem.tr) == logic.getTerm_true()));
         }
     };
+
+    vec<PTRef> tmp;
+    varsToEliminate.copyTo(tmp);
+    auto boolEndIt = std::partition(tmp.begin(), tmp.end(), [&](PTRef var) {
+        assert(logic.isVar(var));
+        return logic.hasSortBool(var);
+    });
+
+    if (boolEndIt != tmp.begin()) { // there are some booleans
+        MapWithKeys<PTRef, PtAsgn, PTRefHash> subst;
+        for (auto it = tmp.begin(); it != boolEndIt; ++it) {
+            subst.insert(*it, PtAsgn(model.evaluate(*it), l_True));
+        }
+        fla = Substitutor(logic, subst).rewrite(fla);
+    }
+    if (boolEndIt == tmp.end()) {
+        return fla;
+    }
+
     PTRef nnf = TermUtils(logic).toNNF(fla);
     auto implicant = getImplicant(nnf, model);
 //    dumpImplicant(std::cout, implicant);
@@ -383,11 +402,11 @@ PTRef ModelBasedProjection::project(PTRef fla, const vec<PTRef> & varsToEliminat
 //        dumpImplicant(std::cout, implicant);
         checkImplicant(implicant);
     }
-    vec<PTRef> finalArgs;
+    tmp.clear();
     for (PtAsgn literal : implicant) {
-        finalArgs.push(literal.sgn == l_True ? literal.tr : logic.mkNot(literal.tr));
+        tmp.push(literal.sgn == l_True ? literal.tr : logic.mkNot(literal.tr));
     }
-    return logic.mkAnd(finalArgs);
+    return logic.mkAnd(tmp);
 }
 
 void ModelBasedProjection::dumpImplicant(std::ostream & out, implicant_t const& implicant) {
