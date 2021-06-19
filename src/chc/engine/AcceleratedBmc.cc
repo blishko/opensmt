@@ -277,6 +277,8 @@ VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
             } else {
                 // Check exact relation
                 solver.pop();
+//                std::cout << "Current  " << logic.printTerm(getExactPower(power)) << '\n';
+//                std::cout << "Previous "<< logic.printTerm(getExactPower(power - 1)) << std::endl;
                 solver.insertFormula(logic.mkAnd(getExactPower(power), logic.mkNot(getExactPower(power - 1))));
                 satres = solver.check();
                 if (satres == s_False) {
@@ -427,6 +429,8 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
 //        std::cout << "Less-than: Iteration " << ++counter << " on level " << power << std::endl;
         SMTConfig config;
         const char * msg = "ok";
+//        config.setOption(SMTConfig::o_verbosity, SMTOption(1), msg);
+        config.setReduction(1);
         config.setOption(SMTConfig::o_produce_inter, SMTOption(true), msg);
         config.setSimplifyInterpolant(4);
         config.setLRAInterpolationAlgorithm(itp_lra_alg_decomposing_strong);
