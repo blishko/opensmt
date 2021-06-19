@@ -6,6 +6,7 @@
 #include "TransformationUtils.h"
 #include "TransitionSystem.h"
 #include "ModelBasedProjection.h"
+#include "QuantifierElimination.h"
 
 #include "MainSolver.h"
 
@@ -151,7 +152,7 @@ GraphVerificationResult AcceleratedBmc::solve(ChcDirectedHyperGraph & system) {
 GraphVerificationResult AcceleratedBmc::solve(const ChcDirectedGraph & system) {
     if (isTransitionSystem(system)) {
         auto ts = toTransitionSystem(system, logic);
-        return solveTransitionSystem(*ts);
+        return solveTransitionSystem(*ts, system);
     }
     else {
         throw std::logic_error("BMC cannot handle general CHC systems yet!");
@@ -221,7 +222,7 @@ vec<PTRef> AcceleratedBmc::getStateVars(int version) {
 }
 
 
-GraphVerificationResult AcceleratedBmc::solveTransitionSystem(TransitionSystem & system) {
+GraphVerificationResult AcceleratedBmc::solveTransitionSystem(TransitionSystem & system, ChcDirectedGraph const & graph) {
     resetTransitionSystem(system);
     unsigned short power = 1;
     while (true) {
@@ -231,7 +232,32 @@ GraphVerificationResult AcceleratedBmc::solveTransitionSystem(TransitionSystem &
                 return GraphVerificationResult(res);
             case VerificationResult::SAFE:
             {
-                return GraphVerificationResult(res);
+                if (not options.hasOption(Options::COMPUTE_WITNESS)) {
+                    return GraphVerificationResult(res);
+                }
+                PTRef transitionInvariant = getLessThanPower(power);
+//                std::cout << "Transition invariant: " << logic.printTerm(transitionInvariant) << std::endl;
+//                std::cout << "Computing inductive invariant" << std::endl;
+                PTRef stateInvariant = QuantifierElimination(logic).eliminate(logic.mkAnd(init, transitionInvariant), getStateVars(0));
+                stateInvariant = getNextVersion(stateInvariant, -1);
+//                std::cout << "Computed invariant: " << logic.printTerm(stateInvariant) << std::endl;
+                auto vertices = graph.getVertices();
+                assert(vertices.size() == 3);
+                VId vertex = vertices[2];
+                assert(vertex != graph.getEntryId() and vertex != graph.getExitId());
+                TermUtils utils(logic);
+                TermUtils::substitutions_map subs;
+                auto graphVars = utils.getVarsFromPredicateInOrder(graph.getStateVersion(vertex));
+                auto systemVars = getStateVars(0);
+                assert(graphVars.size() == systemVars.size());
+                for (int i = 0; i < graphVars.size(); ++i) {
+                    subs.insert({systemVars[i], graphVars[i]});
+                }
+                PTRef graphInvariant = utils.varSubstitute(stateInvariant, subs);
+//                std::cout << "Graph invariant: " << logic.printTerm(graphInvariant) << std::endl;
+                ValidityWitness::definitions_type definitions;
+                definitions.insert({graph.getStateVersion(vertex), graphInvariant});
+                return GraphVerificationResult(res, ValidityWitness(definitions));
             }
             case VerificationResult::UNKNOWN:
                 ++power;
@@ -251,43 +277,24 @@ VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
     auto res = reachabilityQueryLessThan(init, query, power);
     if (isReachable(res)) {
         return VerificationResult::UNSAFE;
+    } else if (isUnreachable(res)) {
+        // Check if we have not reached fixed point.
+        if (power >= 3) {
+            auto fixedPointReached = checkLessThanFixedPoint(power);
+            if (fixedPointReached) {
+                return VerificationResult::SAFE;
+            }
+        }
     }
     // Second compute the exact power using the concatenation of previous one
     res = reachabilityQueryExact(init, query, power);
     if (isReachable(res)) {
         return VerificationResult::UNSAFE;
     } else if (isUnreachable(res)) {
-        // Check if we have not reached fixed point.
         if (power >= 3) {
-            assert(verifyLessThanPower(power));
-            PTRef currentLevelTransition = getLessThanPower(power);
-            PTRef previousLevelTransition = getLessThanPower(power - 1);
-//            std::cout << "Current  " << logic.printTerm(currentLevelTransition) << '\n';
-//            std::cout << "Previous "<< logic.printTerm(previousLevelTransition) << std::endl;
-            SMTConfig config;
-            MainSolver solver(logic, config, "Fixed-point checker");
-            solver.push();
-            solver.insertFormula(logic.mkAnd({
-                                                 currentLevelTransition,
-                                                 logic.mkNot(previousLevelTransition)
-                                             }));
-            auto satres = solver.check();
-            if (satres != s_False) {
-                return VerificationResult::UNKNOWN;
-            } else {
-                // Check exact relation
-                solver.pop();
-//                std::cout << "Current  " << logic.printTerm(getExactPower(power)) << '\n';
-//                std::cout << "Previous "<< logic.printTerm(getExactPower(power - 1)) << std::endl;
-                solver.insertFormula(logic.mkAnd(getExactPower(power), logic.mkNot(getExactPower(power - 1))));
-                satres = solver.check();
-                if (satres == s_False) {
-//                    std::cout << "Both checks passed!" << std::endl;
-                    return VerificationResult::SAFE;
-                } else {
-//                    std::cout << "Less-than is fixedpoint but exact is not!" << std::endl;
-                    return VerificationResult::UNKNOWN;
-                }
+            auto fixedPointReached = checkExactFixedPoint(power);
+            if (fixedPointReached) {
+                return VerificationResult::SAFE;
             }
         }
         return VerificationResult::UNKNOWN;
@@ -697,4 +704,39 @@ bool AcceleratedBmc::verifyLessThanPower(unsigned short power) {
     solver.insertFormula(logic.mkNot(shiftOnlyNextVars(current)));
     auto res = solver.check();
     return res == s_False;
+}
+
+bool AcceleratedBmc::checkLessThanFixedPoint(unsigned short power) {
+    assert(power >= 3);
+    assert(verifyLessThanPower(power));
+    for (unsigned short i = 3; i <= power; ++i) {
+        PTRef currentLevelTransition = getLessThanPower(i);
+        SMTConfig config;
+        MainSolver solver(logic, config, "Fixed-point checker");
+        PTRef currentTwoStep = logic.mkAnd(currentLevelTransition, getNextVersion(currentLevelTransition));
+        solver.insertFormula(logic.mkAnd({currentTwoStep, logic.mkNot(shiftOnlyNextVars(currentLevelTransition))}));
+        auto satres = solver.check();
+        if (satres == s_False) {
+//            std::cout << "Fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
+    assert(power >= 3);
+    for (unsigned short i = 3; i <= power; ++i) {
+        PTRef currentLevelTransition = getExactPower(i);
+        SMTConfig config;
+        MainSolver solver(logic, config, "Fixed-point checker");
+        PTRef currentTwoStep = logic.mkAnd(currentLevelTransition, getNextVersion(currentLevelTransition));
+        solver.insertFormula(logic.mkAnd({currentTwoStep, logic.mkNot(shiftOnlyNextVars(currentLevelTransition))}));
+        auto satres = solver.check();
+        if (satres == s_False) {
+//            std::cout << "Fixed point detected in exact relation on level " << i << " from " << power << std::endl;
+            return true;
+        }
+    }
+    return false;
 }
