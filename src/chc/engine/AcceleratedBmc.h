@@ -57,7 +57,7 @@ public:
     };
 
 private:
-    GraphVerificationResult solveTransitionSystem(TransitionSystem & system);
+    GraphVerificationResult solveTransitionSystem(TransitionSystem & system, ChcDirectedGraph const & graph);
 
     void resetTransitionSystem(TransitionSystem const & system);
 
@@ -97,6 +97,8 @@ private:
     PTRef refineTwoStepTarget(PTRef start, PTRef transition, PTRef goal, Model& model);
 
     bool verifyLessThanPower(unsigned short power);
+    bool checkLessThanFixedPoint(unsigned short power);
+    bool checkExactFixedPoint(unsigned short power);
 };
 
 
