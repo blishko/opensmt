@@ -41,6 +41,7 @@ class AcceleratedBmc : public Engine {
     PTRef query;
     vec<PTRef> stateVariables;
     vec<PTRef> auxiliaryVariables;
+    PTRef inductiveInvariant = PTRef_Undef;
 
 public:
     AcceleratedBmc(Logic& logic, Options const & options) : logic(logic), options(options) {}
@@ -97,8 +98,12 @@ private:
     PTRef refineTwoStepTarget(PTRef start, PTRef transition, PTRef goal, Model& model);
 
     bool verifyLessThanPower(unsigned short power);
+    bool verifyExactPower(unsigned short power);
+
     bool checkLessThanFixedPoint(unsigned short power);
     bool checkExactFixedPoint(unsigned short power);
+
+    PTRef kinductiveToInductive(PTRef invariant, unsigned long k);
 };
 
 
