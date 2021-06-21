@@ -70,6 +70,7 @@ Validator::Result Validator::validateValidityWitness(const ChcSystem & system, c
                return logic.getSymRef(entry.first) == predicateSymbol;
             });
             if (it == definitions.end()) {
+                std::cerr << ";Missing definition of a predicate " << logic.printTerm(predicateTerm) << std::endl;
                 return Validator::Result::NOT_VALIDATED;
             }
             // we need to substitute real arguments in the definition of the predicate
@@ -90,6 +91,7 @@ Validator::Result Validator::validateValidityWitness(const ChcSystem & system, c
                                    return logic.getSymRef(entry.first) == predicateSymbol;
                                });
         if (it == definitions.end()) {
+            std::cerr << ";Missing definition of a predicate " << logic.printTerm(predicateTerm) << std::endl;
             return Validator::Result::NOT_VALIDATED;
         }
         // we need to substitute real arguments in the definition of the predicate
@@ -110,6 +112,10 @@ Validator::Result Validator::validateValidityWitness(const ChcSystem & system, c
         solver.insertFormula(query);
         auto res = solver.check();
         if (res != s_False) {
+
+            std::cerr << ";Clause ";
+            ChcPrinter(logic, std::cerr).print(clause);
+            std::cerr << " not valid" << std::endl;
             return Validator::Result::NOT_VALIDATED;
         }
     }

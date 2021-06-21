@@ -232,14 +232,9 @@ GraphVerificationResult AcceleratedBmc::solveTransitionSystem(TransitionSystem &
                 return GraphVerificationResult(res);
             case VerificationResult::SAFE:
             {
-                if (not options.hasOption(Options::COMPUTE_WITNESS)) {
+                if (not options.hasOption(Options::COMPUTE_WITNESS) or inductiveInvariant == PTRef_Undef) {
                     return GraphVerificationResult(res);
                 }
-                PTRef transitionInvariant = getLessThanPower(power);
-//                std::cout << "Transition invariant: " << logic.printTerm(transitionInvariant) << std::endl;
-//                std::cout << "Computing inductive invariant" << std::endl;
-                PTRef stateInvariant = QuantifierElimination(logic).eliminate(logic.mkAnd(init, transitionInvariant), getStateVars(0));
-                stateInvariant = getNextVersion(stateInvariant, -1);
 //                std::cout << "Computed invariant: " << logic.printTerm(stateInvariant) << std::endl;
                 auto vertices = graph.getVertices();
                 assert(vertices.size() == 3);
@@ -253,7 +248,7 @@ GraphVerificationResult AcceleratedBmc::solveTransitionSystem(TransitionSystem &
                 for (int i = 0; i < graphVars.size(); ++i) {
                     subs.insert({systemVars[i], graphVars[i]});
                 }
-                PTRef graphInvariant = utils.varSubstitute(stateInvariant, subs);
+                PTRef graphInvariant = utils.varSubstitute(inductiveInvariant, subs);
 //                std::cout << "Graph invariant: " << logic.printTerm(graphInvariant) << std::endl;
                 ValidityWitness::definitions_type definitions;
                 definitions.insert({graph.getStateVersion(vertex), graphInvariant});
@@ -284,6 +279,10 @@ VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
             if (fixedPointReached) {
                 return VerificationResult::SAFE;
             }
+            fixedPointReached = checkExactFixedPoint(power - 1);
+            if (fixedPointReached) {
+                return VerificationResult::SAFE;
+            }
         }
     }
     // Second compute the exact power using the concatenation of previous one
@@ -291,12 +290,6 @@ VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
     if (isReachable(res)) {
         return VerificationResult::UNSAFE;
     } else if (isUnreachable(res)) {
-        if (power >= 3) {
-            auto fixedPointReached = checkExactFixedPoint(power);
-            if (fixedPointReached) {
-                return VerificationResult::SAFE;
-            }
-        }
         return VerificationResult::UNKNOWN;
     } else {
         assert(false);
@@ -708,6 +701,28 @@ bool AcceleratedBmc::verifyLessThanPower(unsigned short power) {
     return res == s_False;
 }
 
+bool AcceleratedBmc::verifyExactPower(unsigned short power) {
+    assert(power >= 2);
+    if (power > 2) {
+        bool previousRes = verifyExactPower(power - 1);
+        if (not previousRes) {
+            return false;
+        }
+    }
+    SMTConfig config;
+    MainSolver solver(logic, config, "");
+    PTRef current = getExactPower(power);
+    PTRef previous = getExactPower(power - 1);
+//    std::cout << "Exact on level " << power << " : " << logic.printTerm(current) << std::endl;
+//    std::cout << "Exact on level " << power - 1 << " : " << logic.printTerm(previous) << std::endl;
+    // check that previous or previousExact concatenated with previous implies current
+    solver.insertFormula(logic.mkAnd(previous, getNextVersion(previous)));
+    solver.insertFormula(logic.mkNot(shiftOnlyNextVars(current)));
+    auto res = solver.check();
+    return res == s_False;
+}
+
+
 bool AcceleratedBmc::checkLessThanFixedPoint(unsigned short power) {
     assert(power >= 3);
     assert(verifyLessThanPower(power));
@@ -719,7 +734,9 @@ bool AcceleratedBmc::checkLessThanFixedPoint(unsigned short power) {
         solver.insertFormula(logic.mkAnd({currentTwoStep, logic.mkNot(shiftOnlyNextVars(currentLevelTransition))}));
         auto satres = solver.check();
         if (satres == s_False) {
-//            std::cout << "Fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
+            // std::cout << "Fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
+            // std::cout << "Computing inductive invariant" << std::endl;
+            inductiveInvariant = getNextVersion(QuantifierElimination(logic).eliminate(logic.mkAnd(init, currentLevelTransition), getStateVars(0)), -1);
             return true;
         }
     }
@@ -727,8 +744,8 @@ bool AcceleratedBmc::checkLessThanFixedPoint(unsigned short power) {
 }
 
 bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
-    assert(power >= 3);
-    for (unsigned short i = 3; i <= power; ++i) {
+    assert(power >= 2);
+    for (unsigned short i = 2; i <= power; ++i) {
         PTRef currentLevelTransition = getExactPower(i);
         SMTConfig config;
         MainSolver solver(logic, config, "Fixed-point checker");
@@ -736,9 +753,56 @@ bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
         solver.insertFormula(logic.mkAnd({currentTwoStep, logic.mkNot(shiftOnlyNextVars(currentLevelTransition))}));
         auto satres = solver.check();
         if (satres == s_False) {
-//            std::cout << "Fixed point detected in exact relation on level " << i << " from " << power << std::endl;
+//             std::cout << "Fixed point detected in exact relation on level " << i << " from " << power << std::endl;
+            if (power <= 10) {
+//                std::cout << "Computing inductive invariant" << std::endl;
+                assert(verifyLessThanPower(i));
+                assert(verifyExactPower(i));
+//                std::cout << "Less-than transition: " << logic.printTerm(getLessThanPower(i)) << '\n';
+//                std::cout << "Exact transition: " << logic.printTerm(getExactPower(i)) << std::endl;
+                PTRef transitionInvariant = logic.mkOr(
+                    shiftOnlyNextVars(getLessThanPower(i)),
+                    logic.mkAnd(getLessThanPower(i), getNextVersion(getExactPower(i)))
+                );
+//                std::cout << "Transition invariant: " << logic.printTerm(transitionInvariant) << std::endl;
+                PTRef stateInvariant = QuantifierElimination(logic).eliminate(logic.mkAnd(init,transitionInvariant), getStateVars(0));
+//                std::cout << "After eliminating current state vars: " << logic.printTerm(stateInvariant) << std::endl;
+                stateInvariant = QuantifierElimination(logic).eliminate(stateInvariant, getStateVars(1));
+                stateInvariant = getNextVersion(stateInvariant, -2);
+//                std::cout << "State invariant: " << logic.printTerm(stateInvariant) << std::endl;
+
+                unsigned long k = 1;
+                k <<= (i - 1);
+                inductiveInvariant = kinductiveToInductive(stateInvariant, k);
+//                std::cout << "Inductive invariant: " << logic.printTerm(inductiveInvariant) << std::endl;
+//                std::cout << "Inductive invariant computed!" << std::endl;
+            } else {
+                std::cerr << "; k-inductive invariant computed, by k is too large to compute 1-inductive invariant" << std::endl;
+                inductiveInvariant = PTRef_Undef;
+            }
             return true;
         }
     }
     return false;
+}
+
+// TODO: this is most likely incorrect
+PTRef AcceleratedBmc::kinductiveToInductive(PTRef invariant, unsigned long k) {
+    // TODO: eliminate auxiliary variables from transition relation beforehand
+    vec<PTRef> steps;
+    for (unsigned long i = 0; i < k - 1; ++i) {
+        steps.push(getNextVersion(invariant, i));
+        steps.push(getNextVersion(transition, i));
+    }
+    steps.push(getNextVersion(invariant, k-1));
+    PTRef expanded = logic.mkAnd(steps);
+    vec<PTRef> allVars = TermUtils(logic).getVars(expanded);
+    vec<PTRef> currentStateVars = getStateVars(0);
+    vec<PTRef> toEliminate;
+    for (PTRef var : allVars) {
+        if (std::find(currentStateVars.begin(), currentStateVars.end(), var) == currentStateVars.end()) {
+            toEliminate.push(var);
+        }
+    }
+    return QuantifierElimination(logic).eliminate(expanded, toEliminate);
 }
