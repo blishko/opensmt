@@ -442,13 +442,13 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
         config.setSimplifyInterpolant(4);
         config.setLRAInterpolationAlgorithm(itp_lra_alg_decomposing_strong);
         MainSolver solver(logic, config, "Less-than reachability checker");
+        // Tr^{<n-1} or (Tr^{<n-1} concat Tr^{n-1})
         PTRef previousLessThanTransition = getLessThanPower(power - 1);
-        PTRef previousExactTransition = getExactPower(power - 1);
-        PTRef translatedLessThanTransition = getNextVersion(previousLessThanTransition);
+        PTRef translatedExactTransition = getNextVersion(getExactPower(power - 1));
         PTRef currentToNextNextPreviousLessThanTransition = shiftOnlyNextVars(previousLessThanTransition);
         PTRef twoStepTransition = logic.mkOr(
             currentToNextNextPreviousLessThanTransition,
-            logic.mkAnd(previousExactTransition, translatedLessThanTransition)
+            logic.mkAnd(previousLessThanTransition, translatedExactTransition)
         );
         // TODO: assert from and to are current-state formulas
         solver.insertFormula(twoStepTransition);
@@ -471,6 +471,7 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
             if (model->evaluate(currentToNextNextPreviousLessThanTransition) == logic.getTerm_true()) {
                 // First disjunct was responsible for the positive answer, check it
                 if (power == 2) { // This means the goal is reachable in 0 steps, no need to re-check anythin
+                    // TODO: double-check this
                     result.result = ReachabilityResult::REACHABLE;
                     result.refinedTarget = logic.mkAnd(from, to); // TODO: check if this is needed
                     return result;
@@ -485,18 +486,18 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
                 }
             } else {
                 // Second disjunct was responsible for the positive answer
-                assert(model->evaluate(logic.mkAnd(previousExactTransition, translatedLessThanTransition)) == logic.getTerm_true());
+                assert(model->evaluate(logic.mkAnd(previousLessThanTransition, translatedExactTransition)) == logic.getTerm_true());
                 if (power == 2) { // Since it was not reachable in 0 steps (checked above), here it means it was reachable in exactly 1 step
                     result.result = ReachabilityResult::REACHABLE;
                     // TODO: this could be simplified, but I need refineOneStepTarget
-                    result.refinedTarget = getNextVersion(refineTwoStepTarget(from, logic.mkAnd(previousExactTransition, translatedLessThanTransition), goal, *model), -2);
+                    result.refinedTarget = getNextVersion(refineTwoStepTarget(from, logic.mkAnd(previousLessThanTransition, translatedExactTransition), goal, *model), -2);
                     return result;
                 }
-                PTRef nextState = getNextVersion(extractMidPoint(from, previousExactTransition, translatedLessThanTransition, goal, *model), -1);
+                PTRef nextState = getNextVersion(extractMidPoint(from, previousLessThanTransition, translatedExactTransition, goal, *model), -1);
                 // check the reachability using lower level abstraction
-                auto subQueryRes = reachabilityQueryExact(from, nextState, power - 1);
+                auto subQueryRes = reachabilityQueryLessThan(from, nextState, power - 1);
                 if (isUnreachable(subQueryRes)) {
-                    assert(getExactPower(power - 1) != previousExactTransition);
+                    assert(getLessThanPower(power - 1) != previousLessThanTransition);
                     continue; // We need to re-check this level with refined abstraction
                 } else {
                     assert(isReachable(subQueryRes));
@@ -506,9 +507,10 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
                     }
                 }
                 // here the first half of the found path is feasible, check the second half
-                subQueryRes = reachabilityQueryLessThan(nextState, to, power - 1);
+                PTRef previousExactTransition = getExactPower(power - 1);
+                subQueryRes = reachabilityQueryExact(nextState, to, power - 1);
                 if (isUnreachable(subQueryRes)) {
-                    assert(getExactPower(power - 1) != translatedLessThanTransition);
+                    assert(getExactPower(power - 1) != previousExactTransition);
                     continue; // We need to re-check this level with refined abstraction
                 }
                 assert(isReachable(subQueryRes));
@@ -699,7 +701,7 @@ bool AcceleratedBmc::verifyLessThanPower(unsigned short power) {
     // check that previous or previousExact concatenated with previous implies current
     solver.insertFormula(logic.mkOr(
         shiftOnlyNextVars(previous),
-        logic.mkAnd(previousExact, getNextVersion(previous))
+        logic.mkAnd(previous, getNextVersion(previousExact))
     ));
     solver.insertFormula(logic.mkNot(shiftOnlyNextVars(current)));
     auto res = solver.check();
