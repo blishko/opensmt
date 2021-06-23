@@ -10,6 +10,17 @@
 #include "SMTConfig.h"
 #include "MainSolver.h"
 
+PTRef QuantifierElimination::keepOnly(PTRef fla, const vec<PTRef> & varsToKeep) {
+    auto allVars = TermUtils(logic).getVars(fla);
+    vec<PTRef> toEliminate;
+    for (PTRef var : allVars) {
+        if (std::find(varsToKeep.begin(), varsToKeep.end(), var) == varsToKeep.end()) {
+            toEliminate.push(var);
+        }
+    }
+    return eliminate(fla, toEliminate);
+}
+
 PTRef QuantifierElimination::eliminate(PTRef fla, PTRef var) {
     return eliminate(fla, vec<PTRef>{var});
 }

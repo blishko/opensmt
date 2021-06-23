@@ -19,6 +19,7 @@ public:
 
     PTRef eliminate(PTRef fla, PTRef var);
     PTRef eliminate(PTRef fla, vec<PTRef> const & vars);
+    PTRef keepOnly(PTRef, vec<PTRef> const & vars);
 };
 
 
