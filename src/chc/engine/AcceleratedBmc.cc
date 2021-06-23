@@ -773,10 +773,11 @@ bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
                 unsigned long k = 1;
                 k <<= (i - 1);
                 assert(verifyKinductiveInvariant(stateInvariant, k));
-//                std::cout << "K-inductivness of invariant sucessfully checked" << std::endl;
+//                std::cout << "K-inductivness of invariant sucessfully checked for k=" << k << std::endl;
                 inductiveInvariant = kinductiveToInductive(stateInvariant, k);
 //                std::cout << "Inductive invariant: " << logic.printTerm(inductiveInvariant) << std::endl;
 //                std::cout << "Inductive invariant computed!" << std::endl;
+                assert(verifyKinductiveInvariant(inductiveInvariant, 1));
             } else {
                 std::cerr << "; k-inductive invariant computed, by k is too large to compute 1-inductive invariant" << std::endl;
                 inductiveInvariant = PTRef_Undef;
@@ -787,25 +788,45 @@ bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
     return false;
 }
 
-// TODO: this is most likely incorrect
 PTRef AcceleratedBmc::kinductiveToInductive(PTRef invariant, unsigned long k) {
+    /*
+     * If P(x) is k-inductive invariant then the following formula is 1-inductive invariant:
+     * P(x_0)
+     * \land \forall x_1 (Tr(x_0,x_1) \implies P(x_1)
+     * \land \forall x_1,x_2 (Tr(x_0,x_1 \land P(x_1) \land Tr(x_1,x_2) \implies P(x_2))
+     * ...
+     * \land \forall x_1,x_2,\ldots,x_{k-1}(Tr(x_0,x_1) \land p(x_1) \land \ldots \land P(x_{k-2}) \land Tr(x_{k-2},x_{k-1} \implies P(x_{k_1}))
+     *
+     * This is equivalent to
+     * * P(x_0)
+     * \land \neg \exists x_1 (Tr(x_0,x_1) \land \neg P(x_1)
+     * \land \neg \exists x_1,x_2 (Tr(x_0,x_1 \land P(x_1) \land Tr(x_1,x_2) \land \neg P(x_2))
+     * ...
+     * \land \neg \exists x_1,x_2,\ldots,x_{k-1}(Tr(x_0,x_1) \land p(x_1) \land \ldots \land P(x_{k-2}) \land Tr(x_{k-2},x_{k-1} \land \neg P(x_{k_1}))
+     *
+     * Some computation can be re-used between iteration as going from one iteration to another (ignoring the last negated P(x_i)) we only and
+     * next version of P(x_i) and Tr(x_i, x_{i+1})
+     */
     // TODO: eliminate auxiliary variables from transition relation beforehand
-    vec<PTRef> steps;
-    for (unsigned long i = 0; i < k - 1; ++i) {
-        steps.push(getNextVersion(invariant, i));
-        steps.push(getNextVersion(transition, i));
+    vec<PTRef> stateVars = getStateVars(0);
+    vec<PTRef> resArgs;
+    // step 0
+    resArgs.push(invariant);
+    vec<PTRef> helpers;
+    helpers.push(PTRef_Undef);
+    // step 1
+    PTRef afterElimination = QuantifierElimination(logic).keepOnly(logic.mkAnd(transition, logic.mkNot(getNextVersion(invariant))), stateVars);
+    resArgs.push(logic.mkNot(afterElimination));
+    helpers.push(transition);
+    // steps 2 to k-1
+    for (unsigned long i = 2; i < k; ++i) {
+        PTRef helper = logic.mkAnd({helpers[i-1], getNextVersion(invariant, i-1), getNextVersion(transition, i-1)});
+        helper = QuantifierElimination(logic).eliminate(helper, getStateVars(i-1));
+        helpers.push(helper);
+        afterElimination = QuantifierElimination(logic).keepOnly(logic.mkAnd(helper, logic.mkNot(getNextVersion(invariant, i))), stateVars);
+        resArgs.push(logic.mkNot(afterElimination));
     }
-    steps.push(getNextVersion(invariant, k-1));
-    PTRef expanded = logic.mkAnd(steps);
-    vec<PTRef> allVars = TermUtils(logic).getVars(expanded);
-    vec<PTRef> currentStateVars = getStateVars(0);
-    vec<PTRef> toEliminate;
-    for (PTRef var : allVars) {
-        if (std::find(currentStateVars.begin(), currentStateVars.end(), var) == currentStateVars.end()) {
-            toEliminate.push(var);
-        }
-    }
-    return QuantifierElimination(logic).eliminate(expanded, toEliminate);
+    return logic.mkAnd(resArgs);
 }
 
 bool AcceleratedBmc::verifyKinductiveInvariant(PTRef fla, unsigned long k) {
