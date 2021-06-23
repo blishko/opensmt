@@ -735,8 +735,10 @@ bool AcceleratedBmc::checkLessThanFixedPoint(unsigned short power) {
         auto satres = solver.check();
         if (satres == s_False) {
             // std::cout << "Fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
-            // std::cout << "Computing inductive invariant" << std::endl;
-            inductiveInvariant = getNextVersion(QuantifierElimination(logic).eliminate(logic.mkAnd(init, currentLevelTransition), getStateVars(0)), -1);
+            if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
+                // std::cout << "Computing inductive invariant" << std::endl;
+                inductiveInvariant = getNextVersion(QuantifierElimination(logic).eliminate(logic.mkAnd(init, currentLevelTransition), getStateVars(0)), -1);
+            }
             return true;
         }
     }
@@ -753,34 +755,38 @@ bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
         solver.insertFormula(logic.mkAnd({currentTwoStep, logic.mkNot(shiftOnlyNextVars(currentLevelTransition))}));
         auto satres = solver.check();
         if (satres == s_False) {
-//             std::cout << "Fixed point detected in exact relation on level " << i << " from " << power << std::endl;
-            if (i <= 10) {
-//                std::cout << "Computing inductive invariant" << std::endl;
-                assert(verifyLessThanPower(i));
-                assert(verifyExactPower(i));
-//                std::cout << "Less-than transition: " << logic.printTerm(getLessThanPower(i)) << '\n';
-//                std::cout << "Exact transition: " << logic.printTerm(getExactPower(i)) << std::endl;
-                PTRef transitionInvariant = logic.mkOr(
-                    shiftOnlyNextVars(getLessThanPower(i)),
-                    logic.mkAnd(getLessThanPower(i), getNextVersion(getExactPower(i)))
-                );
-//                std::cout << "Transition invariant: " << logic.printTerm(transitionInvariant) << std::endl;
-                PTRef stateInvariant = QuantifierElimination(logic).eliminate(logic.mkAnd(init,transitionInvariant), getStateVars(0));
-//                std::cout << "After eliminating current state vars: " << logic.printTerm(stateInvariant) << std::endl;
-                stateInvariant = QuantifierElimination(logic).eliminate(stateInvariant, getStateVars(1));
-                stateInvariant = getNextVersion(stateInvariant, -2);
-//                std::cout << "State invariant: " << logic.printTerm(stateInvariant) << std::endl;
-                unsigned long k = 1;
-                k <<= (i - 1);
-                assert(verifyKinductiveInvariant(stateInvariant, k));
-//                std::cout << "K-inductivness of invariant sucessfully checked for k=" << k << std::endl;
-                inductiveInvariant = kinductiveToInductive(stateInvariant, k);
-//                std::cout << "Inductive invariant: " << logic.printTerm(inductiveInvariant) << std::endl;
-//                std::cout << "Inductive invariant computed!" << std::endl;
-                assert(verifyKinductiveInvariant(inductiveInvariant, 1));
-            } else {
-                std::cerr << "; k-inductive invariant computed, by k is too large to compute 1-inductive invariant" << std::endl;
-                inductiveInvariant = PTRef_Undef;
+            if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
+                std::cout << "Fixed point detected in exact relation on level " << i << " from " << power << std::endl;
+                if (i <= 10) {
+//                    std::cout << "Computing inductive invariant" << std::endl;
+                    assert(verifyLessThanPower(i));
+                    assert(verifyExactPower(i));
+//                    std::cout << "Less-than transition: " << logic.printTerm(getLessThanPower(i)) << '\n';
+//                    std::cout << "Exact transition: " << logic.printTerm(getExactPower(i)) << std::endl;
+                    PTRef transitionInvariant = logic.mkOr(
+                        shiftOnlyNextVars(getLessThanPower(i)),
+                        logic.mkAnd(getLessThanPower(i), getNextVersion(getExactPower(i)))
+                    );
+//                    std::cout << "Transition invariant: " << logic.printTerm(transitionInvariant) << std::endl;
+                    PTRef stateInvariant = QuantifierElimination(logic).eliminate(
+                        logic.mkAnd(init, transitionInvariant), getStateVars(0));
+//                    std::cout << "After eliminating current state vars: " << logic.printTerm(stateInvariant) << std::endl;
+                    stateInvariant = QuantifierElimination(logic).eliminate(stateInvariant, getStateVars(1));
+                    stateInvariant = getNextVersion(stateInvariant, -2);
+//                    std::cout << "State invariant: " << logic.printTerm(stateInvariant) << std::endl;
+                    unsigned long k = 1;
+                    k <<= (i - 1);
+                    assert(verifyKinductiveInvariant(stateInvariant, k));
+//                    std::cout << "K-inductivness of invariant sucessfully checked for k=" << k << std::endl;
+                    inductiveInvariant = kinductiveToInductive(stateInvariant, k);
+//                    std::cout << "Inductive invariant: " << logic.printTerm(inductiveInvariant) << std::endl;
+//                    std::cout << "Inductive invariant computed!" << std::endl;
+                    assert(verifyKinductiveInvariant(inductiveInvariant, 1));
+                } else {
+                    std::cerr << "; k-inductive invariant computed, by k is too large to compute 1-inductive invariant"
+                              << std::endl;
+                    inductiveInvariant = PTRef_Undef;
+                }
             }
             return true;
         }
