@@ -32,7 +32,7 @@ Options CommandLineParser::parse(int argc, char ** argv) {
     int validate = 0;
     int printWitness = 0;
     int accelerateLoops = 1;
-    int computeWitness = 1;
+    int computeWitness = 0;
     int lraItpAlg = 0;
     int forcedCovering = 0;
 
