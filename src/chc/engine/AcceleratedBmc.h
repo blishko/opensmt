@@ -103,6 +103,7 @@ private:
     bool checkLessThanFixedPoint(unsigned short power);
     bool checkExactFixedPoint(unsigned short power);
 
+    bool verifyKinductiveInvariant(PTRef invariant, unsigned long k);
     PTRef kinductiveToInductive(PTRef invariant, unsigned long k);
 };
 
