@@ -755,8 +755,8 @@ bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
         solver.insertFormula(logic.mkAnd({currentTwoStep, logic.mkNot(shiftOnlyNextVars(currentLevelTransition))}));
         auto satres = solver.check();
         if (satres == s_False) {
+//            std::cout << "Fixed point detected in exact relation on level " << i << " from " << power << std::endl;
             if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
-                std::cout << "Fixed point detected in exact relation on level " << i << " from " << power << std::endl;
                 if (i <= 10) {
 //                    std::cout << "Computing inductive invariant" << std::endl;
                     assert(verifyLessThanPower(i));
