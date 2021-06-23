@@ -754,7 +754,7 @@ bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
         auto satres = solver.check();
         if (satres == s_False) {
 //             std::cout << "Fixed point detected in exact relation on level " << i << " from " << power << std::endl;
-            if (power <= 10) {
+            if (i <= 10) {
 //                std::cout << "Computing inductive invariant" << std::endl;
                 assert(verifyLessThanPower(i));
                 assert(verifyExactPower(i));
@@ -770,9 +770,10 @@ bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
                 stateInvariant = QuantifierElimination(logic).eliminate(stateInvariant, getStateVars(1));
                 stateInvariant = getNextVersion(stateInvariant, -2);
 //                std::cout << "State invariant: " << logic.printTerm(stateInvariant) << std::endl;
-
                 unsigned long k = 1;
                 k <<= (i - 1);
+                assert(verifyKinductiveInvariant(stateInvariant, k));
+//                std::cout << "K-inductivness of invariant sucessfully checked" << std::endl;
                 inductiveInvariant = kinductiveToInductive(stateInvariant, k);
 //                std::cout << "Inductive invariant: " << logic.printTerm(inductiveInvariant) << std::endl;
 //                std::cout << "Inductive invariant computed!" << std::endl;
@@ -805,4 +806,37 @@ PTRef AcceleratedBmc::kinductiveToInductive(PTRef invariant, unsigned long k) {
         }
     }
     return QuantifierElimination(logic).eliminate(expanded, toEliminate);
+}
+
+bool AcceleratedBmc::verifyKinductiveInvariant(PTRef fla, unsigned long k) {
+    SMTConfig config;
+    // Base cases:
+    {
+        MainSolver solver(logic, config, "k-induction base checker");
+        solver.insertFormula(init);
+        for (unsigned long i = 0; i < k; ++i) {
+            solver.push();
+            solver.insertFormula(logic.mkNot(getNextVersion(fla, i)));
+            auto res = solver.check();
+            if (res != s_False) {
+                std::cerr << "k-induction verification failed; base case " << i << " does not hold!" << std::endl;
+                return false;
+            }
+            solver.pop();
+            solver.insertFormula(getNextVersion(transition, i));
+        }
+    }
+    // Inductive case:
+    MainSolver solver(logic, config, "k-induction inductive step checker");
+    for (unsigned long i = 0; i < k; ++i) {
+        solver.insertFormula(getNextVersion(fla, i));
+        solver.insertFormula(getNextVersion(transition, i));
+    }
+    solver.insertFormula(logic.mkNot(getNextVersion(fla, k)));
+    auto res = solver.check();
+    if (res != s_False) {
+        std::cerr << "k-induction verification failed; induction step does not hold!" << std::endl;
+        return false;
+    }
+    return true;
 }
