@@ -12,85 +12,31 @@
 
 
 namespace{
-    enum class BoundType {EXACT, LOWER, UPPER};
+    enum class BoundType {LOWER, UPPER};
 
     struct Bound {
         BoundType type;
         PTRef val;
+        bool strict;
     };
 
-    class VirtualSubstitution {
-    protected:
-        LALogic & logic;
-    public:
-        explicit VirtualSubstitution(LALogic & logic) : logic{logic} {};
-
-        virtual ~VirtualSubstitution() = default;
-
-        virtual PTRef substitute(Bound bound) const = 0;
-
-    };
-
-    class VirtualSubstitutionEqual : public VirtualSubstitution {
-        PTRef val;
-    public:
-        VirtualSubstitutionEqual(PTRef val, LALogic & logic) : VirtualSubstitution(logic), val{val} {}
-
-        virtual PTRef substitute(Bound bound) const override {
-            BoundType type = bound.type;
-            switch(type) {
-                case BoundType::EXACT:
-                    return logic.mkEq(val, bound.val);
-                case BoundType::LOWER:
-                    return logic.mkNumLt(bound.val, val);
-                case BoundType::UPPER:
-                    return logic.mkNumGt(bound.val, val);
-                default:
-                    assert(false);
-                    throw std::logic_error("Unreachable!");
+    PTRef substituteBound(Bound const& what, Bound const& where, LALogic & logic) {
+        assert(what.type == BoundType::LOWER);
+        if (what.type != BoundType::LOWER) {
+            throw std::invalid_argument("Bound substitution can use only lower bounds");
+        }
+        if (where.type == BoundType::LOWER) {
+            // Here it does not matter if 'what' bound is strict or not the result is non-strict bound
+            return logic.mkNumLeq(where.val, what.val);
+        } else {
+            assert(where.type == BoundType::UPPER);
+            if (what.strict or where.strict) {
+                return logic.mkNumLt(what.val, where.val);
+            } else {
+                return logic.mkNumLeq(what.val, where.val);
             }
         }
-    };
-
-    class VirtualSubstitutionLower : public VirtualSubstitution {
-        PTRef val;
-    public:
-        VirtualSubstitutionLower(PTRef val, LALogic & logic) : VirtualSubstitution(logic), val{val} {}
-
-        virtual PTRef substitute(Bound bound) const override {
-            BoundType type = bound.type;
-            switch(type) {
-                case BoundType::EXACT:
-                    return logic.getTerm_false();
-                case BoundType::LOWER:
-                    return logic.mkNumLeq(bound.val, val);
-                case BoundType::UPPER:
-                    return logic.mkNumGt(bound.val, val);
-                default:
-                    assert(false);
-                    throw std::logic_error("Unreachable!");
-            }
-        }
-    };
-
-    class VirtualSubstitutionMinusInf : public VirtualSubstitution {
-    public:
-        VirtualSubstitutionMinusInf(LALogic & logic) : VirtualSubstitution(logic) {}
-
-        virtual PTRef substitute(Bound bound) const override {
-            BoundType type = bound.type;
-            switch(type) {
-                case BoundType::EXACT:
-                case BoundType::LOWER:
-                    return logic.getTerm_false();
-                case BoundType::UPPER:
-                    return logic.getTerm_true();
-                default:
-                    assert(false);
-                    throw std::logic_error("Unreachable!");
-            }
-        }
-    };
+    }
 
     std::pair<PTRef, PTRef> splitLinearFactorToVarAndConst(PTRef tr, LALogic const & logic) {
         assert(logic.isLinearFactor(tr));
@@ -154,6 +100,20 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
                 for (auto it2 = implicant.begin(); it2 != interestingEnd; ++it2) {
                     it2->tr = substitutor.rewrite(it2->tr);
                 }
+                // remove the true terms
+                assert(it->tr == logic.getTerm_true());
+                auto size = implicant.size();
+                for (std::size_t i = 0; i < size; /* manual control */) {
+                    PtAsgn literal = implicant[i];
+                    if ((literal.tr == logic.getTerm_true() and literal.sgn == l_True) or (literal.tr == logic.getTerm_false() and literal.sgn == l_False)) {
+                        implicant[i] = implicant.back();
+                        implicant.pop_back();
+                        --size;
+                        assert(size == implicant.size());
+                    } else {
+                        ++i;
+                    }
+                }
                 return std::move(implicant);
             } else {
                 assert(lit.sgn == l_False);
@@ -171,10 +131,10 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
     // literals with the variable that we want to eliminate are now in the front of the vector
     // "interestingEnd" points to the first literal that does not contain the var anymore
 
-    // collect the three types of bounds: equality, strict lower, strict upper
+    // collect the lower and upper bounds, remember if they are strict or non-strict
     std::vector<Bound> bounds;
     std::vector<PTRef> lBounds;
-    std::vector<PTRef> eBounds;
+    std::vector<PTRef> uBounds;
     for (auto it = implicant.begin(); it != interestingEnd; ++it) {
         PTRef ineq = it->tr;
         lbool sign = it->sgn;
@@ -186,13 +146,12 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
         PTRef linTerm = lalogic->getPterm(ineq)[1];
         assert(lalogic->isLinearTerm(linTerm));
         auto factors = splitLinearTermToFactors(linTerm, *lalogic);
-        std::vector<std::pair<PTRef, PTRef>> factorsVec(factors.begin(), factors.end());
-        auto interestingVarIt = std::find_if(factorsVec.begin(), factorsVec.end(), [var](std::pair<PTRef, PTRef> factor) {
+        auto interestingVarIt = std::find_if(factors.begin(), factors.end(), [var](std::pair<PTRef, PTRef> factor) {
             return factor.first == var;
         });
-        assert(interestingVarIt != factorsVec.end());
+        assert(interestingVarIt != factors.end());
         auto coeffPTRef = interestingVarIt->second;
-        factorsVec.erase(interestingVarIt);
+        factors.erase(interestingVarIt);
         auto coeff = lalogic->getNumConst(coeffPTRef);
         if (coeff.sign() < 0) {
             isLower = !isLower;
@@ -201,7 +160,7 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
         coeff.negate();
         // update the coefficients in the factor
         vec<PTRef> boundArgs;
-        for (auto & factor : factorsVec) { // in place update
+        for (auto & factor : factors) { // in place update
             auto newCoeff = lalogic->getNumConst(factor.second) / coeff;
             factor.second = lalogic->mkConst(newCoeff);
             boundArgs.push(lalogic->mkNumTimes(factor.first, factor.second)); // MB: no simplification, could be insertTermHash directly
@@ -209,66 +168,45 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
         boundArgs.push(newConstant);
         PTRef bound = lalogic->mkNumPlus(boundArgs); // MB: no simplification should happen, could be insertTermHash
         // Remember the bound
-        // MB: TODO: Experimental! Verify/test if we can ignore the part of non-strict inequality that is not satisfied by the model!
-        if (isStrict) {
-            auto boundType = isLower ? BoundType::LOWER : BoundType::UPPER;
-            bounds.push_back(Bound{.type = boundType, .val = bound});
-            if (isLower) { lBounds.push_back(bound); }
-        } else {
-            // decide based on model which one to used; MB: double check the correctness of this!
-            PTRef boundVal = model.evaluate(bound);
-            assert(lalogic->isConstant(boundVal));
-            if (boundVal == model.evaluate(var)) {
-                bounds.push_back(Bound{.type = BoundType::EXACT, .val = bound});
-                eBounds.push_back(bound);
-            } else {
-                auto boundType = isLower ? BoundType::LOWER : BoundType::UPPER;
-                bounds.push_back(Bound{.type = boundType, .val = bound});
-                if (isLower) { lBounds.push_back(bound); }
-            }
-        }
+        auto boundType = isLower ? BoundType::LOWER : BoundType::UPPER;
+        bounds.push_back(Bound{.type = boundType, .val = bound, .strict = isStrict});
+        auto & whereToPush = isLower ? lBounds : uBounds;
+        whereToPush.push_back(bound);
     }
 
     // pick the correct literal based on the model
     PTRef varVal = model.evaluate(var);
     assert(lalogic->isConstant(varVal));
-    std::unique_ptr<VirtualSubstitution> substitution;
-    for (PTRef eqBound : eBounds) {
-        PTRef val = model.evaluate(eqBound);
-        assert(lalogic->isConstant(val));
-        if (val == varVal) {
-            substitution.reset(new VirtualSubstitutionEqual(eqBound, *lalogic));
-            break;
+    if (lBounds.empty() or uBounds.empty()) {
+        // if we are missing either upper or lower bounds altogether, no new literals are produced and we can just return those not containing this variable
+        return implicant_t(interestingEnd, implicant.end());
+    }
+    // pick substitution from lower bounds
+    // pick highest lower bound according to the model
+    Bound const * highestLowerBound = nullptr;
+    for (auto const& bound : bounds) {
+        if (bound.type == BoundType::UPPER) { continue; }
+        if (highestLowerBound == nullptr) {
+            highestLowerBound = &bound;
+            continue;
+        }
+        PTRef currentValRef = model.evaluate(highestLowerBound->val);
+        PTRef otherValRef = model.evaluate(bound.val);
+        assert(lalogic->isConstant(currentValRef) && lalogic->isConstant(otherValRef));
+        auto const & currentVal = lalogic->getNumConst(currentValRef);
+        auto const & otherVal = lalogic->getNumConst(otherValRef);
+        if (otherVal > currentVal or (otherVal == currentVal and not bound.strict)) {
+            highestLowerBound = &bound;
         }
     }
-    if (!substitution && not lBounds.empty()) { // pick substitution from lower bounds
-        // pick highers lower bound according to the model
-        std::sort(lBounds.begin(), lBounds.end(), [lalogic,&model](PTRef b1, PTRef b2) {
-            PTRef val1 = model.evaluate(b1);
-            PTRef val2 = model.evaluate(b2);
-            assert(lalogic->isConstant(val1) && lalogic->isConstant(val2));
-            return lalogic->getNumConst(val1) > lalogic->getNumConst(val2);
-        });
-        // first is highest
-        PTRef bound = lBounds[0];
-        PTRef val = model.evaluate(bound); (void) val;
-        assert(lalogic->isConstant(val) && lalogic->getNumConst(varVal) > lalogic->getNumConst(val));
-        substitution.reset(new VirtualSubstitutionLower(bound, *lalogic));
-    }
-    if (!substitution) {
-        substitution.reset(new VirtualSubstitutionMinusInf(*lalogic));
-    }
-    // perform virtual substitution
+    // perform substitution
     implicant_t newLiterals;
-    for (Bound bound : bounds) {
-        PTRef subResult = substitution->substitute(bound);
-        if (lalogic->isNumEq(subResult)) { // special case, which we need to handle
-            PTRef lhs = lalogic->getPterm(subResult)[0];
-            PTRef rhs = lalogic->getPterm(subResult)[1];
-            newLiterals.push_back(PtAsgn(lalogic->mkNumLeq(lhs, rhs), l_True));
-            newLiterals.push_back(PtAsgn(lalogic->mkNumLeq(rhs, lhs), l_True));
+    for (Bound const & bound : bounds) {
+        PTRef subResult = substituteBound(*highestLowerBound, bound, *lalogic);
+        if (lalogic->isNumEq(subResult)) {
+            throw std::logic_error("This should not happen anymore");
         }
-        else {
+        else if (subResult != logic.getTerm_true()) {
             PtAsgn newLiteral = lalogic->isNot(subResult) ? PtAsgn(lalogic->getPterm(subResult)[0], l_False)
                                                        : PtAsgn(subResult, l_True);
             newLiterals.push_back(newLiteral);
