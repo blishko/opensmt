@@ -142,6 +142,7 @@ public:
     PTRef expressZeroTermFor(PTRef zeroTerm, PTRef var);
 
     bool atomContainsVar(PTRef atom, PTRef var);
+    bool termContainsVar(PTRef term, PTRef var);
 };
 
 class TimeMachine {
