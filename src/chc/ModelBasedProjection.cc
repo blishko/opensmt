@@ -321,42 +321,6 @@ void collectImplicant(Logic & logic, PTRef fla, Model & model, std::vector<char>
 }
 
 ModelBasedProjection::implicant_t ModelBasedProjection::getImplicant(PTRef fla, Model & model) {
-    /*
-    class CollectImplicantConfig :public DefaultVisitorConfig {
-    private:
-        Logic & logic;
-
-        Model& model;
-
-        implicant_t literals;
-
-    public:
-        CollectImplicantConfig(Logic& logic, Model& model) : logic(logic), model(model) {}
-
-        implicant_t getImplicant() const { return std::move(literals); }
-
-        void visit(PTRef term) override {
-            assert(model.evaluate(term) == logic.getTerm_true());
-            if (logic.isAtom(term)) {
-                literals.push_back(PtAsgn(term, l_True));
-            } else if (logic.isNot(term)) {
-                PTRef child = logic.getPterm(term)[0];
-                if (not logic.isAtom(child)) {
-                    throw std::logic_error("Formula must be in NNF for implicant extraction!");
-                }
-                literals.push_back(PtAsgn(child, l_False));
-            }
-        }
-
-        bool previsit(PTRef term) override {
-            return logic.hasSortBool(term) && model.evaluate(term) == logic.getTerm_true();
-        }
-    };
-    CollectImplicantConfig config(logic, model);
-    TermVisitor<CollectImplicantConfig> collector(logic, config);
-    collector.visit(fla);
-    return config.getImplicant();
-    */
     assert(model.evaluate(fla) == logic.getTerm_true());
     std::vector<PtAsgn> literals;
     std::vector<char> processed;
