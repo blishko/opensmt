@@ -7,12 +7,33 @@
 #include <ModelBasedProjection.h>
 #include <ModelBuilder.h>
 
-TEST(test_MBP, test_AllEqualBounds) {
+class MBP_RealTest : public ::testing::Test {
+protected:
     LRALogic logic;
-    ModelBasedProjection mbp(logic);
+    PTRef x;
+    PTRef y;
+    PTRef z;
+    PTRef a;
+    PTRef b;
+    PTRef c;
+    PTRef zero;
+    PTRef one;
+    ModelBasedProjection mbp;
+    MBP_RealTest() : mbp(logic) {
+        x = logic.mkNumVar("x");
+        y = logic.mkNumVar("y");
+        z = logic.mkNumVar("z");
+        a = logic.mkBoolVar("a");
+        b = logic.mkBoolVar("b");
+        c = logic.mkBoolVar("c");
+        zero = logic.getTerm_NumZero();
+        one = logic.getTerm_NumOne();
+    }
+};
+
+TEST_F(MBP_RealTest, test_AllEqualBounds) {
     PTRef x0 = logic.mkNumVar("x0");
     PTRef x1 = logic.mkNumVar("x1");
-    PTRef one = logic.getTerm_NumOne();
     // x0 = 0 and x1 = x0 + 1
     // (and (<= x0 0) (<= 0 x0) (<= (- x1 x0) 1) (<= 1 (- x1 x0)))
     PTRef lit1 = logic.mkNumLeq(x0, logic.getTerm_NumZero());
@@ -29,14 +50,24 @@ TEST(test_MBP, test_AllEqualBounds) {
     ASSERT_EQ(result, logic.mkAnd(logic.mkNumLeq(one, x1), logic.mkNumLeq(x1, one)));
 }
 
-TEST(test_MBP, test_SimpleDisjunction) {
-    LRALogic logic;
-    ModelBasedProjection mbp(logic);
+TEST_F(MBP_RealTest, test_AllEqualBoundsTwoVars) {
+    // x = y and y = z
+    PTRef eq1 = logic.mkEq(x, y);
+    PTRef eq2 = logic.mkEq(y, z);
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, zero);
+    builder.addVarValue(y, zero);
+    builder.addVarValue(z, zero);
+    auto model = builder.build();
+    PTRef result = mbp.project(logic.mkAnd(eq1, eq2), {x,y}, *model);
+    // result should be equivalent to true
+    std::cout << logic.printTerm(result) << std::endl;
+    ASSERT_EQ(result, logic.getTerm_true());
+}
+
+TEST_F(MBP_RealTest, test_SimpleDisjunction) {
     PTRef x0 = logic.mkNumVar("x0");
     PTRef x1 = logic.mkNumVar("x1");
-    PTRef a = logic.mkBoolVar("a");
-    PTRef b = logic.mkBoolVar("b");
-    PTRef zero = logic.getTerm_NumZero();
     // (a or b) and (x0 <= 0) and (x0 >= x1))
     PTRef part1 = logic.mkOr(a,b);
     PTRef part2 = logic.mkNumLeq(x0, zero);
@@ -58,4 +89,48 @@ TEST(test_MBP, test_SimpleDisjunction) {
         found = found or logic.getPterm(result)[i] == expectedConjunct;
     }
     ASSERT_TRUE(found);
+}
+
+TEST_F(MBP_RealTest, test_TwoInequalities_BothStrict) {
+    PTRef lower = logic.mkNumLt(y, x);
+    PTRef upper = logic.mkNumLt(x, zero);
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, logic.mkConst(FastRational(-1)));
+    builder.addVarValue(y, logic.mkConst(FastRational(-3,2)));
+    auto model = builder.build();
+    auto res = mbp.project(logic.mkAnd(lower, upper), {x}, *model);
+    ASSERT_EQ(logic.mkNumLt(y, zero), res);
+}
+
+TEST_F(MBP_RealTest, test_TwoInequalities_StrictNonstrict) {
+    PTRef lower = logic.mkNumLt(y, x);
+    PTRef upper = logic.mkNumLeq(x, zero);
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, zero);
+    builder.addVarValue(y, logic.mkConst(FastRational(-3,2)));
+    auto model = builder.build();
+    auto res = mbp.project(logic.mkAnd(lower, upper), {x}, *model);
+    ASSERT_EQ(logic.mkNumLt(y, zero), res);
+}
+
+TEST_F(MBP_RealTest, test_TwoInequalities_NonstrictStrict) {
+    PTRef lower = logic.mkNumLeq(y, x);
+    PTRef upper = logic.mkNumLt(x, zero);
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, logic.mkConst(FastRational(-3,2)));
+    builder.addVarValue(y, logic.mkConst(FastRational(-3,2)));
+    auto model = builder.build();
+    auto res = mbp.project(logic.mkAnd(lower, upper), {x}, *model);
+    ASSERT_EQ(logic.mkNumLt(y, zero), res);
+}
+
+TEST_F(MBP_RealTest, test_TwoInequalities_NonstrictNonstrict) {
+    PTRef lower = logic.mkNumLeq(y, x);
+    PTRef upper = logic.mkNumLeq(x, zero);
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, zero);
+    builder.addVarValue(y, logic.mkConst(FastRational(-3,2)));
+    auto model = builder.build();
+    auto res = mbp.project(logic.mkAnd(lower, upper), {x}, *model);
+    ASSERT_EQ(logic.mkNumLeq(y, zero), res);
 }
