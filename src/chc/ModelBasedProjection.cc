@@ -130,35 +130,44 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
         throw std::logic_error("Projection for other than Reals or Ints not supported");
     }
     // proper elimination of Real variable
-    std::vector<PtAsgn> literals; // collect literals in std::vector, and also deal with equalities
-    for (PtAsgn ptasgn : implicant) {
-        if (lalogic->isNumEq(ptasgn.tr)) { // special handling of equality
-            PTRef lhs = lalogic->getPterm(ptasgn.tr)[0];
-            PTRef rhs = lalogic->getPterm(ptasgn.tr)[1];
-            if (ptasgn.sgn == l_True) { // just put both inequalities there
-                literals.push_back(PtAsgn(lalogic->mkNumLeq(lhs, rhs), l_True));
-                literals.push_back(PtAsgn(lalogic->mkNumLeq(rhs, lhs), l_True));
-            } else if (ptasgn.sgn == l_False) {
-                PTRef lt = lalogic->mkNumLt(lhs, rhs);
-                PTRef gt = lalogic->mkNumGt(lhs, rhs);
-                PTRef valid = model.evaluate(lt) == lalogic->getTerm_true() ? lt : gt;
-                assert(model.evaluate(valid) == lalogic->getTerm_true());
-                assert(lalogic->isNot(valid)); // strict inequality is negation of non-strict one
-                literals.push_back(PtAsgn(lalogic->getPterm(valid)[0], l_False));
-            }
-        }
-        else { // just copy the element if it is not TRUE
-            if (not (lalogic->isTrue(ptasgn.tr) && ptasgn.sgn == l_True)) {
-                literals.push_back(ptasgn);
-            }
-        }
-    }
     LATermUtils utils(*lalogic);
     auto containsVar = [var, &utils](PtAsgn lit) {
         return utils.atomContainsVar(lit.tr, var);
     };
+
     // split the literals to those containing var and those not containing var
-    auto interestingEnd = std::partition(literals.begin(), literals.end(), containsVar);
+    auto interestingEnd = std::partition(implicant.begin(), implicant.end(), containsVar);
+    // preprocessing
+    for (auto it = implicant.begin(); it != interestingEnd; ++it) {
+        PtAsgn lit = *it;
+        if (logic.isEquality(lit.tr)) {
+            PTRef lhs = logic.getPterm(lit.tr)[0];
+            PTRef rhs = logic.getPterm(lit.tr)[1];
+            if (lit.sgn == l_True) { // if equality is present, we just use it to substitute the variable away
+                assert(model.evaluate(lit.tr) == logic.getTerm_true());
+                // express variable and substitute in the rest of literals
+                PTRef zeroTerm = lalogic->mkNumMinus(lhs, rhs);
+                PTRef substitutionTerm = utils.expressZeroTermFor(zeroTerm, var);
+                MapWithKeys<PTRef, PtAsgn, PTRefHash> subst;
+                subst.insert(var, PtAsgn(substitutionTerm, l_True));
+                Substitutor substitutor(logic, subst);
+                for (auto it2 = implicant.begin(); it2 != interestingEnd; ++it2) {
+                    it2->tr = substitutor.rewrite(it2->tr);
+                }
+                return std::move(implicant);
+            } else {
+                assert(lit.sgn == l_False);
+                // replace the non-equality with the strict inequality that is true in the model
+                PTRef lt = lalogic->mkNumLt(lhs, rhs);
+                PTRef replacement = model.evaluate(lt) == logic.getTerm_true() ? lt : lalogic->mkNumLt(rhs, lhs);
+                assert(logic.isNot(replacement)); // strict inequalities are expressed as negations of non-strict ones
+                it->tr = logic.getPterm(replacement)[0]; // we store the non-strict inequality, the sign is already set to false
+                assert(it->sgn == l_False);
+            }
+        }
+    }
+    // at this point we have only strict and nonstrict inequalities
+
     // literals with the variable that we want to eliminate are now in the front of the vector
     // "interestingEnd" points to the first literal that does not contain the var anymore
 
@@ -166,7 +175,7 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
     std::vector<Bound> bounds;
     std::vector<PTRef> lBounds;
     std::vector<PTRef> eBounds;
-    for (auto it = literals.begin(); it != interestingEnd; ++it) {
+    for (auto it = implicant.begin(); it != interestingEnd; ++it) {
         PTRef ineq = it->tr;
         lbool sign = it->sgn;
         assert(sign == l_True || sign == l_False);
@@ -266,7 +275,7 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
         }
     }
     // don't forget the literals not containing the var to eliminate
-    newLiterals.insert(newLiterals.end(), interestingEnd, literals.end());
+    newLiterals.insert(newLiterals.end(), interestingEnd, implicant.end());
     return std::move(newLiterals);
 }
 

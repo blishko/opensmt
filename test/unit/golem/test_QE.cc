@@ -36,7 +36,8 @@ TEST_F(QE_RealTest, test_singleVar_Equality) {
     EXPECT_EQ(res, logic.getTerm_true());
     fla = logic.mkAnd(fla, logic.mkEq(x, zero));
     res = qe.eliminate(fla, x);
-    EXPECT_EQ(res, logic.mkAnd(logic.mkNumLeq(y, zero), logic.mkNumGeq(y, zero)));
+    std::cout << logic.printTerm(res) << std::endl;
+    EXPECT_TRUE(res == logic.mkEq(y, zero) or res == logic.mkAnd(logic.mkNumLeq(y, zero), logic.mkNumGeq(y, zero)));
 }
 
 TEST_F(QE_RealTest, test_singleBoolVar) {
