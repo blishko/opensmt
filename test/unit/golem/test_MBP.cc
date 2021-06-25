@@ -143,3 +143,31 @@ TEST_F(MBP_RealTest, test_Disequality) {
     auto res = mbp.project(diseq, {y}, *model);
     ASSERT_EQ(logic.getTerm_true(), res);
 }
+
+TEST_F(MBP_RealTest, test_strictInequalitiesProblem) {
+    PTRef lit1 = logic.mkNumLeq(x, logic.mkNumMinus(y, one));
+    PTRef lit2 = logic.mkNumGeq(x, logic.mkNumMinus(y, one));
+    PTRef lit3 = logic.mkNot(logic.mkEq(y, one));
+    PTRef fla = logic.mkAnd({lit1, lit2, lit3});
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, logic.mkConst(FastRational(1)));
+    builder.addVarValue(y, logic.mkConst(FastRational(2)));
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {y}, *model);
+    std::cout << logic.printTerm(res) << std::endl;
+    EXPECT_EQ(res, logic.mkNumLt(zero, x));
+}
+
+TEST_F(MBP_RealTest, test_strictNonStrictEqualitiesSameBound) {
+    PTRef lit1 = logic.mkNumLeq(zero, x);
+    PTRef lit2 = logic.mkNumLt(zero, x);
+    PTRef lit3 = logic.mkNumLt(x,y);
+    PTRef fla = logic.mkAnd({lit1, lit2, lit3});
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, logic.mkConst(FastRational(1)));
+    builder.addVarValue(y, logic.mkConst(FastRational(2)));
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {x}, *model);
+    std::cout << logic.printTerm(res) << std::endl;
+    EXPECT_EQ(res, logic.mkNumLt(zero, y));
+}
