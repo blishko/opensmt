@@ -26,8 +26,16 @@ namespace{
             throw std::invalid_argument("Bound substitution can use only lower bounds");
         }
         if (where.type == BoundType::LOWER) {
-            // Here it does not matter if 'what' bound is strict or not the result is non-strict bound
-            return logic.mkNumLeq(where.val, what.val);
+            if (where.val == what.val) {
+                return logic.getTerm_true();
+            }
+            if (what.strict and where.strict) {
+                return logic.mkNumLeq(where.val, what.val);
+            } else if (what.strict or where.strict) {
+                return logic.mkNumLt(where.val, what.val);
+            } else {
+                return logic.mkNumLeq(where.val, what.val);
+            }
         } else {
             assert(where.type == BoundType::UPPER);
             if (what.strict or where.strict) {

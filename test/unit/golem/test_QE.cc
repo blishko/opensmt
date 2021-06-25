@@ -54,3 +54,17 @@ TEST_F(QE_RealTest, test_singleBoolVar) {
 //    std::cout << logic.printTerm(res) << std::endl;
     EXPECT_EQ(res, logic.mkOr(b,c));
 }
+
+TEST_F(QE_RealTest, test_strictInequalities) {
+    PTRef lit1 = logic.mkNumLeq(zero, x);
+    PTRef lit2 = logic.mkNumLeq(x, logic.mkNumMinus(y, one));
+    PTRef lit3 = logic.mkNumGeq(x, logic.mkNumMinus(y, one));
+    PTRef lit4 = logic.mkNot(logic.mkEq(y, one));
+    PTRef fla = logic.mkAnd({lit1, lit2, lit3, lit4});
+    PTRef res = QuantifierElimination(logic).eliminate(fla, y);
+    std::cout << logic.printTerm(res) << std::endl;
+//    EXPECT_EQ(res, logic.mkNumLt(zero, x));
+    // The result is equivalent to x > 0, but we are missing arithmetic simplifications to get it to that form
+    // Current result is x >= 0 and x > 0 which is equivalent to x > 0;
+    EXPECT_EQ(res, logic.mkAnd(logic.mkNumLt(zero, x), logic.mkNumLeq(zero, x)));
+}
