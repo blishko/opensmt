@@ -213,7 +213,7 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
         assert(lalogic->isConstant(currentValRef) && lalogic->isConstant(otherValRef));
         auto const & currentVal = lalogic->getNumConst(currentValRef);
         auto const & otherVal = lalogic->getNumConst(otherValRef);
-        if (otherVal > currentVal or (otherVal == currentVal and not bound.strict)) {
+        if (otherVal > currentVal or (otherVal == currentVal and bound.strict)) {
             highestLowerBound = &bound;
         }
     }
