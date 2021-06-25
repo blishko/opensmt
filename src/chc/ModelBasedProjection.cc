@@ -120,9 +120,15 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
                 // replace the non-equality with the strict inequality that is true in the model
                 PTRef lt = lalogic->mkNumLt(lhs, rhs);
                 PTRef replacement = model.evaluate(lt) == logic.getTerm_true() ? lt : lalogic->mkNumLt(rhs, lhs);
-                assert(logic.isNot(replacement)); // strict inequalities are expressed as negations of non-strict ones
-                it->tr = logic.getPterm(replacement)[0]; // we store the non-strict inequality, the sign is already set to false
-                assert(it->sgn == l_False);
+                if (replacement == logic.getTerm_true()) {
+                    // This could happen if the original inequality is like "x != x + 1"
+                    it->tr = logic.getTerm_true();
+                    it->sgn = l_True;
+                } else {
+                    assert(logic.isNot(replacement)); // strict inequalities are expressed as negations of non-strict ones
+                    it->tr = logic.getPterm(replacement)[0]; // we store the non-strict inequality, the sign is already set to false
+                    assert(it->sgn == l_False);
+                }
             }
         }
     }
@@ -139,6 +145,10 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
         PTRef ineq = it->tr;
         lbool sign = it->sgn;
         assert(sign == l_True || sign == l_False);
+        if (ineq == logic.getTerm_true()) { // this is still possible if we had true disequality at the beginning (x != x + 1)
+            assert(sign == l_True);
+            continue;
+        }
         bool isStrict = sign == l_False;
         bool isLower = sign != l_False; // inequalities are of form "c <= t" where c is constant
         PTRef constant = lalogic->getPterm(ineq)[0];
