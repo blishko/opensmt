@@ -487,6 +487,7 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
                     return result;
                 }
                 PTRef nextState = getNextVersion(extractMidPoint(from, previousLessThanTransition, translatedExactTransition, goal, *model), -1);
+//                std::cout << "Midpoint is " << logic.printTerm(nextState) << std::endl;
                 // check the reachability using lower level abstraction
                 auto subQueryRes = reachabilityQueryLessThan(from, nextState, power - 1);
                 if (isUnreachable(subQueryRes)) {
@@ -498,6 +499,7 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
                     if (nextState == PTRef_Undef) {
                         throw std::logic_error("Refined reachable target not set in subquery!");
                     }
+//                    std::cout << "Modified midpoint is " << logic.printTerm(nextState) << std::endl;
                 }
                 // here the first half of the found path is feasible, check the second half
                 PTRef previousExactTransition = getExactPower(power - 1);
