@@ -134,3 +134,12 @@ TEST_F(MBP_RealTest, test_TwoInequalities_NonstrictNonstrict) {
     auto res = mbp.project(logic.mkAnd(lower, upper), {x}, *model);
     ASSERT_EQ(logic.mkNumLeq(y, zero), res);
 }
+
+TEST_F(MBP_RealTest, test_Disequality) {
+    PTRef diseq = logic.mkNot(logic.mkEq(y, logic.mkNumPlus(y, one)));
+    ModelBuilder builder(logic);
+    builder.addVarValue(y, zero);
+    auto model = builder.build();
+    auto res = mbp.project(diseq, {y}, *model);
+    ASSERT_EQ(logic.getTerm_true(), res);
+}
