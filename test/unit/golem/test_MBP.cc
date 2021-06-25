@@ -158,10 +158,11 @@ TEST_F(MBP_RealTest, test_strictInequalitiesProblem) {
     EXPECT_EQ(res, logic.mkNumLt(zero, x));
 }
 
-TEST_F(MBP_RealTest, test_strictNonStrictEqualitiesSameBound) {
+TEST_F(MBP_RealTest, test_strictNonStrictEqualitiesSameBound_1) {
     PTRef lit1 = logic.mkNumLeq(zero, x);
     PTRef lit2 = logic.mkNumLt(zero, x);
     PTRef lit3 = logic.mkNumLt(x,y);
+    // 0 <= x and 0 < x and x < y
     PTRef fla = logic.mkAnd({lit1, lit2, lit3});
     ModelBuilder builder(logic);
     builder.addVarValue(x, logic.mkConst(FastRational(1)));
@@ -170,4 +171,60 @@ TEST_F(MBP_RealTest, test_strictNonStrictEqualitiesSameBound) {
     PTRef res = mbp.project(fla, {x}, *model);
     std::cout << logic.printTerm(res) << std::endl;
     EXPECT_EQ(res, logic.mkNumLt(zero, y));
+}
+
+TEST_F(MBP_RealTest, test_strictNonStrictEqualitiesSameBound_2) {
+    PTRef lit1 = logic.mkNumLeq(zero, x);
+    PTRef lit2 = logic.mkNumLt(zero, x);
+    PTRef lit3 = logic.mkNumLeq(x,y);
+    // 0 <= x and 0 < x and x < y
+    PTRef fla = logic.mkAnd({lit1, lit2, lit3});
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, logic.mkConst(FastRational(1)));
+    builder.addVarValue(y, logic.mkConst(FastRational(2)));
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {x}, *model);
+    std::cout << logic.printTerm(res) << std::endl;
+    EXPECT_EQ(res, logic.mkNumLt(zero, y));
+}
+
+TEST_F(MBP_RealTest, test_RegressionTest) {
+    PTRef x = this->x;
+    PTRef y = this->y;
+    PTRef xp = logic.mkNumVar("xp");
+    PTRef yp = logic.mkNumVar("yp");
+    // y >= 256 and x <= 64
+    PTRef part1 = logic.mkAnd(
+        logic.mkNumLeq(x, logic.mkConst(FastRational(64))),
+        logic.mkNumLeq(y, logic.mkConst(FastRational(256)))
+    );
+    // yp - y >= 0 and y - yp >= 0 and xp <= x + 256 and yp > x + 254
+    PTRef diff = logic.mkNumMinus(y, yp);
+    PTRef part2 = logic.mkAnd({
+       logic.mkNumLeq(diff, zero),
+       logic.mkNumLeq(zero, diff),
+       logic.mkNumLeq(xp, logic.mkNumPlus(x, logic.mkConst(FastRational(256)))),
+       logic.mkNumGt(yp, logic.mkNumPlus(x, logic.mkConst(FastRational(254))))
+    });
+    // yp != xp and yp <= xp
+    PTRef part3 = logic.mkAnd(
+        logic.mkNumLt(yp, xp),
+//        logic.getTerm_true()
+        logic.mkNumLeq(yp, xp)
+    );
+    PTRef fla = logic.mkAnd({part1, part2, part3});
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, logic.mkConst(FastRational(3,2)));
+    builder.addVarValue(y, logic.mkConst(FastRational(256)));
+    builder.addVarValue(xp, logic.mkConst(FastRational(513,2)));
+    builder.addVarValue(yp, logic.mkConst(FastRational(256)));
+    auto model = builder.build();
+    ASSERT_EQ(model->evaluate(fla), logic.getTerm_true());
+    PTRef midpoint = mbp.project(fla, {xp,yp}, *model);
+    std::cout << logic.printTerm(midpoint) << std::endl;
+    ModelBuilder checkerBuilder(logic);
+    checkerBuilder.addVarValue(x, zero);
+    checkerBuilder.addVarValue(y, logic.mkConst(FastRational(256)));
+    auto checker = checkerBuilder.build();
+    ASSERT_NE(checker->evaluate(midpoint), logic.getTerm_true());
 }
