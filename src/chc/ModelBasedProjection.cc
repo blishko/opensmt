@@ -26,12 +26,7 @@ namespace{
             throw std::invalid_argument("Bound substitution can use only lower bounds");
         }
         if (where.type == BoundType::LOWER) {
-            if (where.val == what.val) {
-                return logic.getTerm_true();
-            }
-            if (what.strict and where.strict) {
-                return logic.mkNumLeq(where.val, what.val);
-            } else if (what.strict or where.strict) {
+            if (where.strict and not what.strict) {
                 return logic.mkNumLt(where.val, what.val);
             } else {
                 return logic.mkNumLeq(where.val, what.val);
@@ -221,6 +216,7 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
     implicant_t newLiterals;
     for (Bound const & bound : bounds) {
         PTRef subResult = substituteBound(*highestLowerBound, bound, *lalogic);
+        assert(model.evaluate(subResult) == logic.getTerm_true());
         if (lalogic->isNumEq(subResult)) {
             throw std::logic_error("This should not happen anymore");
         }
