@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <iosfwd>
 class Logic;
+class LALogic;
 
 class ModelBasedProjection {
 private:
@@ -31,4 +32,6 @@ private:
     implicant_t getImplicant(PTRef var, Model & model);
 
     void dumpImplicant(ostream& out, implicant_t const & implicant);
+
+    void postprocess(implicant_t & literals, LALogic & logic);
 };

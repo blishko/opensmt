@@ -62,6 +62,45 @@ namespace{
     }
 }
 
+void ModelBasedProjection::postprocess(implicant_t & literals, LALogic & lalogic) {
+    MapWithKeys<PtAsgn, PTRef, PtAsgnHash> bounds;
+    for (PtAsgn literal : literals) {
+        auto sign = literal.sgn;
+        PTRef ineq = literal.tr;
+        if (not lalogic.isNumLeq(ineq)) {
+            throw std::logic_error("Only inequalities should be present in collect literals in MBP");
+        }
+        PTRef constant = lalogic.getPterm(ineq)[0];
+        PTRef term = lalogic.getPterm(ineq)[1];
+        assert(lalogic.isConstant(constant) and lalogic.isLinearTerm(term));
+        PtAsgn key(term, sign);
+        PTRef currentValue;
+        if (bounds.peek(key, currentValue)) {
+            // keep only the stronger bound
+            if (sign == l_True) { // positive literal -> lower bound -> keep higher number
+                if (lalogic.getNumConst(constant) > lalogic.getNumConst(currentValue)) {
+                    bounds[key] = constant;
+                }
+            } else {
+                assert(sign == l_False);
+                // negative literal -> upper bound -> keep lower number
+                if (lalogic.getNumConst(constant) < lalogic.getNumConst(currentValue)) {
+                    bounds[key] = constant;
+                }
+            }
+        } else {
+            bounds.insert(key, constant);
+        }
+    }
+    auto const & keys = bounds.getKeys();
+    if (keys.size() < literals.size()) { // something actually changed
+        literals.clear();
+        for (PtAsgn key : keys) {
+            literals.push_back(PtAsgn(lalogic.mkNumLeq(bounds[key], key.tr), key.sgn));
+        }
+    }
+}
+
 ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef var, implicant_t implicant, Model & model) {
     assert(logic.isVar(var));
     // if the variable is boolean, simply remove it from implicant
@@ -226,6 +265,7 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
             newLiterals.push_back(newLiteral);
         }
     }
+    postprocess(newLiterals, *lalogic);
     // don't forget the literals not containing the var to eliminate
     newLiterals.insert(newLiterals.end(), interestingEnd, implicant.end());
     return std::move(newLiterals);
