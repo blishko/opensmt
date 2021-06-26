@@ -3,6 +3,7 @@
 //
 
 #include "TransformationUtils.h"
+#include "QuantifierElimination.h"
 
 bool isTransitionSystem(ChcDirectedGraph const & graph) {
     auto graphRepresentation = AdjacencyListsGraphRepresentation::from(graph);
@@ -79,6 +80,7 @@ std::unique_ptr<TransitionSystem> toTransitionSystem(ChcDirectedGraph const & gr
             std::transform(nextVars.begin(), nextVars.end(), stateVars.begin(), std::inserter(subMap, subMap.end()),
                            [](PTRef key, PTRef value) { return std::make_pair(key, value); });
             init = utils.varSubstitute(fla, subMap);
+            init = QuantifierElimination(logic).keepOnly(init, stateVars);
 //            std::cout << logic.printTerm(init) << std::endl;
         }
         if (isLoop) {
@@ -99,6 +101,7 @@ std::unique_ptr<TransitionSystem> toTransitionSystem(ChcDirectedGraph const & gr
             std::transform(vars.begin(), vars.end(), stateVars.begin(), std::inserter(subMap, subMap.end()),
                            [](PTRef key, PTRef value) { return std::make_pair(key, value); });
             bad = utils.varSubstitute(fla, subMap);
+            bad = QuantifierElimination(logic).keepOnly(bad, stateVars);
 //            std::cout << logic.printTerm(bad) << std::endl;
         }
     }
