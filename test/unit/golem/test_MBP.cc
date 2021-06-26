@@ -308,4 +308,19 @@ TEST_F(MBP_RealTest, test_strictNonStrict_4) {
     EXPECT_EQ(res, logic.mkAnd(logic.mkNumLeq(zero, y), logic.mkNumLt(y, two)));
 }
 
+TEST_F(MBP_RealTest, test_avoidRedundantBounds) {
+    // x <= y and y <= 0 and y <= 1 (last one is redundant)
+    PTRef lit1 = logic.mkNumLeq(x,y);
+    PTRef lit2 = logic.mkNumLeq(y, zero);
+    PTRef lit3 = logic.mkNumLeq(y, one);
+    PTRef fla = logic.mkAnd({lit1, lit2, lit3});
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, logic.mkConst(FastRational(-1)));
+    builder.addVarValue(y, zero);
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {y}, *model);
+    std::cout << logic.printTerm(res) << std::endl;
+    EXPECT_EQ(res, logic.mkNumLeq(x, zero)); // The redundant bound x <= 1 should not appear in the projection
+}
+
 
