@@ -453,7 +453,10 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
             ipartitions_t mask = 1;
             itpContext->getSingleInterpolant(itps, mask);
             assert(itps.size() == 1);
-            PTRef itp = itps[0];
+            config.setLRAInterpolationAlgorithm(itp_lra_alg_strong); // compute also McMillan's interpolant
+            itpContext->getSingleInterpolant(itps, mask);
+            assert(itps.size() == 2);
+            PTRef itp = logic.mkAnd(itps);
             // replace next-next variables with next-variables
             itp = cleanInterpolant(itp);
             storeLessThanPower(power, itp);
