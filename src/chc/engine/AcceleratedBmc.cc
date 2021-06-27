@@ -738,13 +738,36 @@ bool AcceleratedBmc::checkLessThanFixedPoint(unsigned short power) {
         PTRef currentTwoStep = logic.mkAnd(currentLevelTransition, getNextVersion(currentLevelTransition));
         solver.insertFormula(logic.mkAnd({currentTwoStep, logic.mkNot(shiftOnlyNextVars(currentLevelTransition))}));
         auto satres = solver.check();
+        if (satres != s_False) {
+            solver.push();
+            solver.insertFormula(init);
+            satres = solver.check();
+            if (satres == s_False) {
+//                std::cout << "Invariant found using restricted check with Init" << std::endl;
+            }
+        }
         if (satres == s_False) {
             // std::cout << "Fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
             if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
                 // std::cout << "Computing inductive invariant" << std::endl;
-                inductiveInvariant = getNextVersion(QuantifierElimination(logic).eliminate(logic.mkAnd(init, currentLevelTransition), getStateVars(0)), -1);
+                inductiveInvariant = getNextVersion(QuantifierElimination(logic).keepOnly(logic.mkAnd(init, currentLevelTransition), getStateVars(1)), -1);
             }
             return true;
+        } else {
+            solver.pop();
+            solver.push();
+            solver.insertFormula(getNextVersion(query, 2));
+            satres = solver.check();
+            if (satres == s_False) {
+//                std::cout << "Invariant found using restricted check with Bad" << std::endl;
+                if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
+                    // std::cout << "Computing inductive invariant" << std::endl;
+                    inductiveInvariant = QuantifierElimination(logic).keepOnly(logic.mkAnd(currentLevelTransition,
+                        getNextVersion(query)), getStateVars(0));
+                }
+                return true;
+            }
+
         }
     }
     return false;
