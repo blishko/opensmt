@@ -107,6 +107,7 @@ public:
 
     void strenghtenTransition(PTRef nTransition) override {
         assert(not pushed);
+        solver->push();
         solver->insertFormula(nTransition);
         opensmt::setbit(mask, allformulasInserted++);
 //        std::cout << "Current number of formulas inserted: " << allformulasInserted << std::endl;
