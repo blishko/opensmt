@@ -41,16 +41,20 @@ namespace{
         }
     }
 
-    std::pair<PTRef, PTRef> splitLinearFactorToVarAndConst(PTRef tr, LALogic const & logic) {
-        assert(logic.isLinearFactor(tr));
+    struct LinearFactor {
         PTRef var;
-        PTRef constant;
-        logic.splitTermToVarAndConst(tr, var, constant);
-        return {var, constant};
+        PTRef coeff;
+    };
+
+    LinearFactor splitLinearFactorToVarAndConst(PTRef tr, LALogic const & logic) {
+        assert(logic.isLinearFactor(tr));
+        LinearFactor res;
+        logic.splitTermToVarAndConst(tr, res.var, res.coeff);
+        return res;
     }
 
-    std::vector<std::pair<PTRef, PTRef>> splitLinearTermToFactors(PTRef tr, LALogic const & logic ) {
-        std::vector<std::pair<PTRef, PTRef>> factors;
+    std::vector<LinearFactor> splitLinearTermToFactors(PTRef tr, LALogic const & logic ) {
+        std::vector<LinearFactor> factors;
         assert(logic.isLinearTerm(tr));
         if (logic.isLinearFactor(tr)) { return {splitLinearFactorToVarAndConst(tr, logic)}; }
 
@@ -202,7 +206,7 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
             return factor.first == var;
         });
         assert(interestingVarIt != factors.end());
-        auto coeffPTRef = interestingVarIt->second;
+        auto coeffPTRef = interestingVarIt->coeff;
         factors.erase(interestingVarIt);
         auto coeff = lalogic->getNumConst(coeffPTRef);
         if (coeff.sign() < 0) {
@@ -213,9 +217,9 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
         // update the coefficients in the factor
         vec<PTRef> boundArgs;
         for (auto & factor : factors) { // in place update
-            auto newCoeff = lalogic->getNumConst(factor.second) / coeff;
-            factor.second = lalogic->mkConst(newCoeff);
-            boundArgs.push(lalogic->mkNumTimes(factor.first, factor.second)); // MB: no simplification, could be insertTermHash directly
+            auto newCoeff = lalogic->getNumConst(factor.coeff) / coeff;
+            factor.coeff = lalogic->mkConst(newCoeff);
+            boundArgs.push(lalogic->mkNumTimes(factor.var, factor.coeff)); // MB: no simplification, could be insertTermHash directly
         }
         boundArgs.push(newConstant);
         PTRef bound = lalogic->mkNumPlus(boundArgs); // MB: no simplification should happen, could be insertTermHash
