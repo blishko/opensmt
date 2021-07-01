@@ -34,4 +34,40 @@ private:
     void dumpImplicant(ostream& out, implicant_t const & implicant);
 
     void postprocess(implicant_t & literals, LALogic & logic);
+
+    // LIA version
+
+    struct DivisibilityConstraint {
+        PTRef constant;
+        PTRef term;
+    };
+
+    using div_constraints_t = std::vector<DivisibilityConstraint>;
+
+    PTRef projectIntegerVars(PTRef* beg, PTRef* end, implicant_t implicant, Model & model);
+
+    void processDivConstraints(PTRef var, div_constraints_t & divConstraints, implicant_t & implicant, Model & model);
+
+    void processClassicLiterals(PTRef var, div_constraints_t & divConstraints, implicant_t & implicant, Model & model);
+
+    struct LIABound {
+        PTRef term;
+        PTRef coeff;
+    };
+
+    struct LIABoundLower {
+        PTRef term;
+        PTRef coeff;
+    };
+    struct LIABoundUpper {
+        PTRef term;
+        PTRef coeff;
+    };
+
+    struct ResolveResult {
+        std::vector<PTRef> bounds;
+        DivisibilityConstraint constraint; // TODO: optional
+    };
+
+    ResolveResult resolve(LIABoundLower const& lower, LIABoundUpper const& upper, Model & model, LIALogic & lialogic);
 };
