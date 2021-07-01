@@ -3,6 +3,7 @@
 //
 
 #include <gtest/gtest.h>
+#include <LIALogic.h>
 #include <LRALogic.h>
 #include <ModelBasedProjection.h>
 #include <ModelBuilder.h>
@@ -324,3 +325,38 @@ TEST_F(MBP_RealTest, test_avoidRedundantBounds) {
 }
 
 
+class MBP_IntTest : public ::testing::Test {
+protected:
+    LIALogic logic;
+    PTRef x;
+    PTRef y;
+    PTRef z;
+    PTRef a;
+    PTRef b;
+    PTRef c;
+    PTRef zero;
+    PTRef one;
+    ModelBasedProjection mbp;
+    MBP_IntTest() : mbp(logic) {
+        x = logic.mkNumVar("x");
+        y = logic.mkNumVar("y");
+        z = logic.mkNumVar("z");
+        a = logic.mkBoolVar("a");
+        b = logic.mkBoolVar("b");
+        c = logic.mkBoolVar("c");
+        zero = logic.getTerm_NumZero();
+        one = logic.getTerm_NumOne();
+    }
+};
+
+TEST_F(MBP_IntTest, test_oneLower_oneUpper) {
+    PTRef lit1 = logic.mkNumLeq(x,y);
+    PTRef lit2 = logic.mkNumLeq(y,zero);
+    PTRef fla = logic.mkAnd(lit1, lit2);
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, logic.mkConst(FastRational(-1)));
+    builder.addVarValue(y, zero);
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {y}, *model);
+    EXPECT_EQ(res, logic.mkNumLeq(x, zero));
+}
