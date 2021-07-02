@@ -55,7 +55,7 @@ PTRef QuantifierElimination::eliminate(PTRef fla, vec<PTRef> const & vars) {
         }
     }
     PTRef result = logic.mkOr(projections);
-    if (not logic.isAtom(result)) {
+    if (logic.isBooleanOperator(result) and not logic.isNot(result)) {
         result = ::rewriteMaxArityAggresive(logic, result);
         result = ::simplifyUnderAssignment_Aggressive(result, logic);
         // TODO: more simplifications?
