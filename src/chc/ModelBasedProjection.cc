@@ -626,10 +626,40 @@ void ModelBasedProjection::processClassicLiterals(PTRef var, div_constraints_t &
         implicant = std::move(newLiterals);
         return;
     } else {
-        // TODO: handle equalities
-        throw std::logic_error("TODO");
+        implicant_t newLiterals;
+        LIABound const& eqBound = equal[0];
+        assert(lialogic.getNumConst(eqBound.coeff).sign() > 0 and lialogic.getNumConst(eqBound.coeff).isInteger());
+        // equal bounds
+        for (auto it = equal.begin() + 1; it != equal.end(); ++it) {
+            // ax = t; bx = s => as = bt
+            LIABound const & otherBound = *it;
+            assert(lialogic.getNumConst(otherBound.coeff).sign() > 0 and lialogic.getNumConst(otherBound.coeff).isInteger());
+            PTRef lhs = lialogic.mkNumTimes(otherBound.term, eqBound.coeff);
+            PTRef rhs = lialogic.mkNumTimes(eqBound.term, otherBound.coeff);
+            newLiterals.push_back(PtAsgn(lialogic.mkEq(lhs, rhs), l_True));
+        }
+        // lower bounds
+        for (auto const & lowerBound : lower) {
+            assert(lialogic.getNumConst(lowerBound.coeff).sign() > 0 and lialogic.getNumConst(lowerBound.coeff).isInteger());
+            // ax = t; s <= bx => as <= bt
+            PTRef lhs = lialogic.mkNumTimes(lowerBound.term, eqBound.coeff);
+            PTRef rhs = lialogic.mkNumTimes(eqBound.term, lowerBound.coeff);
+            newLiterals.push_back(PtAsgn(lialogic.mkNumLeq(lhs, rhs), l_True));
+        }
+        // upper bounds
+        for (auto const & upperBound : upper) {
+            assert(lialogic.getNumConst(upperBound.coeff).sign() > 0 and lialogic.getNumConst(upperBound.coeff).isInteger());
+            // ax = t; s >= bx => as >= bt
+            PTRef lhs = lialogic.mkNumTimes(upperBound.term, eqBound.coeff);
+            PTRef rhs = lialogic.mkNumTimes(eqBound.term, upperBound.coeff);
+            newLiterals.push_back(PtAsgn(lialogic.mkNumGeq(lhs, rhs), l_True));
+        }
+        // add literals not containing the variable
+        newLiterals.insert(newLiterals.end(), interestingEnd, implicant.end());
+        implicant = std::move(newLiterals);
+        return;
     }
-    throw std::logic_error("Not implemented yet!");
+    throw std::logic_error("UNREACHABLE!");
 }
 
 /*
