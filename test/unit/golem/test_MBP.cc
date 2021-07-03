@@ -431,3 +431,19 @@ TEST_F(MBP_IntTest, test_ElimTwoVariables_withDivConstraints) {
     std::cout << logic.pp(res) << std::endl;
     EXPECT_EQ(res, logic.getTerm_true());
 }
+
+TEST_F(MBP_IntTest, test_Equality) {
+    PTRef two = logic.mkConst(FastRational(2));
+    PTRef lit1 = logic.mkNumLeq(x,y);
+    PTRef lit2 = logic.mkNumLeq(y,z);
+    PTRef lit3 = logic.mkEq(y, two);
+    PTRef fla = logic.mkAnd({lit1, lit2, lit3});
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, logic.mkConst(FastRational(-2)));
+    builder.addVarValue(y, two);
+    builder.addVarValue(z, two);
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {y}, *model);
+    std::cout << logic.pp(res) << std::endl;
+    EXPECT_EQ(res, logic.mkAnd(logic.mkNumLeq(x, two), logic.mkNumLeq(two, z)));
+}
