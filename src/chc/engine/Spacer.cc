@@ -6,22 +6,33 @@
 #include "MainSolver.h"
 #include "ModelBasedProjection.h"
 
+#include <unordered_map>
+#include <unordered_set>
+
 class ApproxMap {
 public:
-    std::vector<PTRef> getComponents(VId vid, std::size_t bound) {
+    vec<PTRef> getComponents(VId vid, std::size_t bound) {
+        vec<PTRef> res;
         ensureBound(bound);
         auto const& boundMap = innerMap[bound];
         auto it = boundMap.find(vid);
-        return it == boundMap.end() ? std::vector<PTRef>{} : it->second;
+        if (it != boundMap.end()) {
+            res.capacity(it->second.size());
+            for (PTRef component : it->second) {
+                res.push(component);
+            }
+        }
+        return res;
     }
 
     void insert(VId vid, std::size_t bound, PTRef summary) {
         ensureBound(bound);
         auto & boundMap = innerMap[bound];
-        boundMap[vid].push_back(summary);
+        auto & components = boundMap[vid];
+        components.insert(summary);
     }
 private:
-    std::vector<std::map<VId, std::vector<PTRef>>> innerMap; // bound -> vertex -> conjuncts of approximation
+    std::vector<std::unordered_map<VId, std::unordered_set<PTRef, PTRefHash>, VertexHasher>> innerMap; // bound -> vertex -> conjuncts of approximation
 
     void ensureBound(std::size_t bound) {
         while (innerMap.size() <= bound) {
