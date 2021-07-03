@@ -72,6 +72,25 @@ public:
 
 class ChcDirectedHyperGraph;
 
+// Helper structure for lookup of edges given its vertices
+struct EdgeHasher {
+    std::size_t operator()(std::pair<VId, VId> pair) const {
+        // From Boost hash_combine
+        std::hash<std::size_t> hasher;
+        std::size_t res = 0;
+        res ^= hasher(pair.first.id) + 0x9e3779b9 + (res<<6) + (res>>2);
+        res ^= hasher(pair.second.id) + 0x9e3779b9 + (res<<6) + (res>>2);
+        return res;
+    }
+};
+
+struct VertexHasher {
+    std::size_t operator()(VId vid) const {
+        std::hash<std::size_t> hasher;
+        return hasher(vid.id);
+    }
+};
+
 class ChcDirectedGraph {
 
     VId entry;
@@ -80,18 +99,6 @@ class ChcDirectedGraph {
     std::vector<Vertex> vertices;
     std::vector<DirectedEdge> edges;
     CanonicalPredicateRepresentation predicates;
-
-    // Helper structure for lookup of edges given its vertices
-    struct EdgeHasher {
-        std::size_t operator()(std::pair<VId, VId> pair) const {
-            // From Boost hash_combine
-            std::hash<std::size_t> hasher;
-            std::size_t res = 0;
-            res ^= hasher(pair.first.id) + 0x9e3779b9 + (res<<6) + (res>>2);
-            res ^= hasher(pair.second.id) + 0x9e3779b9 + (res<<6) + (res>>2);
-            return res;
-        }
-    };
 
 public:
     ChcDirectedGraph(std::vector<Vertex> vertices, std::vector<DirectedEdge> edges, CanonicalPredicateRepresentation predicates, VId entry, VId exit) :
