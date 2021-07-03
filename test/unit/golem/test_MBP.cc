@@ -413,3 +413,21 @@ TEST_F(MBP_IntTest, test_oneLower_oneUpper_withCoefficients_3) {
         logic.mkEq(logic.mkIntMod(z, two), zero)
     ));
 }
+
+TEST_F(MBP_IntTest, test_ElimTwoVariables_withDivConstraints) {
+    PTRef two = logic.mkConst(FastRational(2));
+    PTRef three = logic.mkConst(FastRational(3));
+    PTRef y2 = logic.mkNumTimes(two, y);
+    PTRef y3 = logic.mkNumTimes(three, y);
+    PTRef lit1 = logic.mkNumLeq(x,y3);
+    PTRef lit2 = logic.mkNumLeq(y2,z);
+    PTRef fla = logic.mkAnd(lit1, lit2);
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, three);
+    builder.addVarValue(y, logic.getTerm_NumOne());
+    builder.addVarValue(z, two);
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {y,z}, *model);
+    std::cout << logic.pp(res) << std::endl;
+    EXPECT_EQ(res, logic.getTerm_true());
+}

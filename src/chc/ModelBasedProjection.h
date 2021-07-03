@@ -67,6 +67,7 @@ private:
     struct ResolveResult {
         std::vector<PTRef> bounds;
         DivisibilityConstraint constraint; // TODO: optional
+        bool hasDivConstraint;
     };
 
     ResolveResult resolve(LIABoundLower const& lower, LIABoundUpper const& upper, Model & model, LIALogic & lialogic);
