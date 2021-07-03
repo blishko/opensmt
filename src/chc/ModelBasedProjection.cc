@@ -636,7 +636,10 @@ void ModelBasedProjection::processClassicLiterals(PTRef var, div_constraints_t &
             assert(lialogic.getNumConst(otherBound.coeff).sign() > 0 and lialogic.getNumConst(otherBound.coeff).isInteger());
             PTRef lhs = lialogic.mkNumTimes(otherBound.term, eqBound.coeff);
             PTRef rhs = lialogic.mkNumTimes(eqBound.term, otherBound.coeff);
-            newLiterals.push_back(PtAsgn(lialogic.mkEq(lhs, rhs), l_True));
+            PTRef newLit = lialogic.mkEq(lhs, rhs);
+            if (newLit != lialogic.getTerm_true()) {
+                newLiterals.push_back(PtAsgn(newLit, l_True));
+            }
         }
         // lower bounds
         for (auto const & lowerBound : lower) {
@@ -644,7 +647,10 @@ void ModelBasedProjection::processClassicLiterals(PTRef var, div_constraints_t &
             // ax = t; s <= bx => as <= bt
             PTRef lhs = lialogic.mkNumTimes(lowerBound.term, eqBound.coeff);
             PTRef rhs = lialogic.mkNumTimes(eqBound.term, lowerBound.coeff);
-            newLiterals.push_back(PtAsgn(lialogic.mkNumLeq(lhs, rhs), l_True));
+            PTRef newLit = lialogic.mkNumLeq(lhs, rhs);
+            if (newLit != lialogic.getTerm_true()) {
+                newLiterals.push_back(PtAsgn(newLit, l_True));
+            }
         }
         // upper bounds
         for (auto const & upperBound : upper) {
@@ -652,7 +658,10 @@ void ModelBasedProjection::processClassicLiterals(PTRef var, div_constraints_t &
             // ax = t; s >= bx => as >= bt
             PTRef lhs = lialogic.mkNumTimes(upperBound.term, eqBound.coeff);
             PTRef rhs = lialogic.mkNumTimes(eqBound.term, upperBound.coeff);
-            newLiterals.push_back(PtAsgn(lialogic.mkNumGeq(lhs, rhs), l_True));
+            PTRef newLit = lialogic.mkNumGeq(lhs, rhs);
+            if (newLit != lialogic.getTerm_true()) {
+                newLiterals.push_back(PtAsgn(newLit, l_True));
+            }
         }
         // add literals not containing the variable
         newLiterals.insert(newLiterals.end(), interestingEnd, implicant.end());
