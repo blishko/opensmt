@@ -360,3 +360,18 @@ TEST_F(MBP_IntTest, test_oneLower_oneUpper) {
     PTRef res = mbp.project(fla, {y}, *model);
     EXPECT_EQ(res, logic.mkNumLeq(x, zero));
 }
+
+TEST_F(MBP_IntTest, test_oneLower_oneUpper_withCoefficients) {
+    PTRef two = logic.mkConst(FastRational(2));
+    PTRef y2 = logic.mkNumTimes(two, y);
+    PTRef lit1 = logic.mkNumLeq(x,y2);
+    PTRef lit2 = logic.mkNumLt(y2,zero);
+    PTRef fla = logic.mkAnd(lit1, lit2);
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, logic.mkConst(FastRational(-2)));
+    builder.addVarValue(y, logic.getTerm_NumMinusOne());
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {y}, *model);
+    std::cout << logic.pp(res) << std::endl;
+    EXPECT_EQ(res, logic.mkNumLeq(x, logic.mkConst(FastRational(-2))));
+}

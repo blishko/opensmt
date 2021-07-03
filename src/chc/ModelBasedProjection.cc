@@ -76,7 +76,7 @@ namespace{
                 assert(varFactor == nullptr);
                 varFactor = &factor;
             } else {
-                args.push(logic.mkNumTimes(factor.coeff, factor.var));
+                args.push(factor.var == PTRef_Undef ? factor.coeff : logic.mkNumTimes(factor.coeff, factor.var));
             }
         }
         assert(varFactor);
@@ -557,8 +557,11 @@ void ModelBasedProjection::processClassicLiterals(PTRef var, div_constraints_t &
             }
         } else {
             assert(lialogic.isNumLeq(literal.tr));
-            if (literal.sgn != l_True) {
-                throw std::logic_error("Unexpected situation");
+            if (literal.sgn == l_False) { // not (c <= t) <=> c > t <=> c - 1 >= t
+                literal.sgn = l_True;
+                auto sides = lialogic.leqToConstantAndTerm(literal.tr);
+                assert(lialogic.isNumConst(sides.first));
+                literal.tr = lialogic.mkNumGeq(lialogic.mkConst(lialogic.getNumConst(sides.first) - 1), sides.second);
             }
             assert(literal.sgn == l_True);
             auto sides = lialogic.leqToConstantAndTerm(literal.tr);
