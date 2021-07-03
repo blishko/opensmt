@@ -361,7 +361,7 @@ TEST_F(MBP_IntTest, test_oneLower_oneUpper) {
     EXPECT_EQ(res, logic.mkNumLeq(x, zero));
 }
 
-TEST_F(MBP_IntTest, test_oneLower_oneUpper_withCoefficients) {
+TEST_F(MBP_IntTest, test_oneLower_oneUpper_withCoefficients_1) {
     PTRef two = logic.mkConst(FastRational(2));
     PTRef y2 = logic.mkNumTimes(two, y);
     PTRef lit1 = logic.mkNumLeq(x,y2);
@@ -374,4 +374,42 @@ TEST_F(MBP_IntTest, test_oneLower_oneUpper_withCoefficients) {
     PTRef res = mbp.project(fla, {y}, *model);
     std::cout << logic.pp(res) << std::endl;
     EXPECT_EQ(res, logic.mkNumLeq(x, logic.mkConst(FastRational(-2))));
+}
+
+TEST_F(MBP_IntTest, test_oneLower_oneUpper_withCoefficients_2) {
+    PTRef two = logic.mkConst(FastRational(2));
+    PTRef three = logic.mkConst(FastRational(3));
+    PTRef y2 = logic.mkNumTimes(two, y);
+    PTRef y3 = logic.mkNumTimes(three, y);
+    PTRef lit1 = logic.mkNumLeq(zero,y3);
+    PTRef lit2 = logic.mkNumLeq(y2,zero);
+    PTRef fla = logic.mkAnd(lit1, lit2);
+    ModelBuilder builder(logic);
+    builder.addVarValue(y, zero);
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {y}, *model);
+    std::cout << logic.pp(res) << std::endl;
+    EXPECT_EQ(res, logic.getTerm_true());
+}
+
+TEST_F(MBP_IntTest, test_oneLower_oneUpper_withCoefficients_3) {
+    PTRef two = logic.mkConst(FastRational(2));
+    PTRef three = logic.mkConst(FastRational(3));
+    PTRef y2 = logic.mkNumTimes(two, y);
+    PTRef y3 = logic.mkNumTimes(three, y);
+    PTRef lit1 = logic.mkNumLeq(x,y3);
+    PTRef lit2 = logic.mkNumLeq(y2,z);
+    PTRef fla = logic.mkAnd(lit1, lit2);
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, three);
+    builder.addVarValue(y, logic.getTerm_NumOne());
+    builder.addVarValue(z, two);
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {y}, *model);
+    std::cout << logic.pp(res) << std::endl;
+    // MB: not 100% sure, but this should be the correct result
+    EXPECT_EQ(res, logic.mkAnd(
+        logic.mkNumLeq(logic.mkNumTimes(two,x), logic.mkNumTimes(three,z)),
+        logic.mkEq(logic.mkIntMod(z, two), zero)
+    ));
 }
