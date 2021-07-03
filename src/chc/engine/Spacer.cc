@@ -82,6 +82,8 @@ class SpacerContext {
     UnderApproxMap under;
     OverApproxMap over;
 
+    std::size_t lowestChangedLevel = 0;
+
     PTRef getMustSummary(VId vid, std::size_t bound) {
         return logic.mkOr(under.getComponents(vid, bound));
     }
@@ -202,6 +204,7 @@ SpacerContext::BoundedSafetyResult SpacerContext::boundSafety(std::size_t curren
     VId query = graph.getExitId();
     PriorityQueue pqueue;
     pqueue.push(ProofObligation{query, currentBound, logic.getTerm_true()});
+    lowestChangedLevel = currentBound;
     while(not pqueue.empty()) {
         auto const & pob = pqueue.peek();
         if (pob.vertex == graph.getEntryId()) {
@@ -296,6 +299,9 @@ SpacerContext::BoundedSafetyResult SpacerContext::boundSafety(std::size_t curren
                 PTRef newLemma = TimeMachine(logic).sendFlaThroughTime(res.interpolant, -1);
 //                std::cout << "Learnt new lemma for " << pob.vertex.id << " at level " << pob.bound << " - " << logic.printTerm(newLemma) << std::endl;
                 over.insert(pob.vertex, pob.bound, newLemma);
+                if (pob.bound < lowestChangedLevel) {
+                    lowestChangedLevel = pob.bound;
+                }
                 pqueue.pop(); // This POB has been successfully blocked
             } else {
                 for (auto const& npob : newProofObligations) {
@@ -420,9 +426,10 @@ SpacerContext::MayReachResult SpacerContext::mayReachable(EId eid, PTRef targetC
 
 // *********** INDUCTIVE CHECK *****************************
 SpacerContext::InductiveCheckResult SpacerContext::isInductive(std::size_t maxLevel) {
-    std::size_t minLevel = 0;
+    std::size_t minLevel = lowestChangedLevel;
     for (std::size_t level = minLevel; level <= maxLevel; ++level) {
         bool inductive = true;
+//        std::cout << "Checking level " << level << std::endl;
         for (VId vid : graph.getVertices()) {
 //            std::cout << " Checking vertex " << vid.id << std::endl;
             auto maySummaryComponents = over.getComponents(vid, level);
@@ -440,6 +447,7 @@ SpacerContext::InductiveCheckResult SpacerContext::isInductive(std::size_t maxLe
             PTRef body = logic.mkOr(edgeRepresentations);
 //            std::cout << "Body representation of " << vid.id << " at level " << level << " is " << logic.printTerm(body) << std::endl;
             // Figure out which components of the may summary are implied by body at level n and so can be pushed to level n+1
+//            std::cout << "Need to check " << maySummaryComponents.size() << " components for vertex " << vid.id << std::endl;
             for (PTRef component : maySummaryComponents) {
                 PTRef nextStateComponent = TimeMachine(logic).sendFlaThroughTime(component, 1);
 //                std::cout << " Checking component " << logic.printTerm(nextStateComponent) << std::endl;
