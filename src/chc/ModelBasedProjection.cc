@@ -425,10 +425,12 @@ PTRef ModelBasedProjection::projectIntegerVars(PTRef * beg, PTRef * end, implica
         tmp.push(literal.sgn == l_True ? literal.tr : logic.mkNot(literal.tr));
     }
     if (not divConstraints.empty()) {
-        // TODO add div constraints
-        throw std::logic_error("TODO");
+        for (auto const & constraint : divConstraints) {
+            assert(lialogic.isConstant(constraint.constant));
+            PTRef mod = lialogic.mkIntMod(constraint.term, constraint.constant);
+            tmp.push(logic.mkEq(mod, lialogic.getTerm_NumZero()));
+        }
     }
-
     return logic.mkAnd(tmp);
 }
 
