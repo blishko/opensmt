@@ -454,10 +454,10 @@ void ModelBasedProjection::processDivConstraints(PTRef var, div_constraints_t & 
     auto itInterestingEnd = std::partition(divConstraints.begin(), divConstraints.end(), [&](DivisibilityConstraint const& c) {
         return utils.termContainsVar(c.term, var);
     });
-    if (itInterestingEnd != divConstraints.end()) {
+    if (itInterestingEnd != divConstraints.begin()) {
         // there are some div constraints for this variable
-        auto beg = itInterestingEnd;
-        auto end = divConstraints.end();
+        auto beg = divConstraints.begin();
+        auto end = itInterestingEnd;
         std::vector<FastRational> divisors;
         std::transform(beg, end, std::back_inserter(divisors), [&lialogic](DivisibilityConstraint const& constraint) {
             auto const& val = lialogic.getNumConst(constraint.constant);
@@ -472,15 +472,15 @@ void ModelBasedProjection::processDivConstraints(PTRef var, div_constraints_t & 
         // TODO: add fastrat_fdiv_r
         FastRational const& val = lialogic.getNumConst(model.evaluate(var));
         FastRational u = mbp_fastrat_fdiv_r(val,d);
-        assert(u.sign() > 0 and u.isInteger());
+        assert(u.sign() >= 0 and u.isInteger());
 
         // update divisibility constraints by substituting u for x
         // TODO: make this more efficient
         TermUtils::substitutions_map subst;
         subst.insert({var, lialogic.mkConst(u)});
         TermUtils tutils(logic);
-        std::for_each(beg, end, [&tutils, &subst](DivisibilityConstraint & constaint) {
-            tutils.varSubstitute(constaint.term, subst);
+        std::for_each(beg, end, [&tutils, &subst](DivisibilityConstraint & constraint) {
+            constraint.term = tutils.varSubstitute(constraint.term, subst);
         });
 
         // update the classic constraints and the variable that needs to be eliminated
@@ -617,7 +617,7 @@ void ModelBasedProjection::processClassicLiterals(PTRef var, div_constraints_t &
             for (PTRef nBound : res.bounds) {
                 newLiterals.push_back(PtAsgn(nBound, l_True));
             }
-            if (res.bounds.size() > 1) {
+            if (res.hasDivConstraint) {
                 divConstraints.push_back(res.constraint);
             }
         }
@@ -626,6 +626,7 @@ void ModelBasedProjection::processClassicLiterals(PTRef var, div_constraints_t &
         implicant = std::move(newLiterals);
         return;
     } else {
+        // TODO: handle equalities
         throw std::logic_error("TODO");
     }
     throw std::logic_error("Not implemented yet!");
@@ -660,6 +661,7 @@ ModelBasedProjection::ResolveResult ModelBasedProjection::resolve(LIABoundLower 
         // case 1
         PTRef nBound = lialogic.mkNumLeq(lialogic.mkNumPlus(as_term, lialogic.mkConst(mul)), bt_term);
         result.bounds.push_back(nBound);
+        result.hasDivConstraint = false;
         return result;
     }
 
@@ -670,20 +672,26 @@ ModelBasedProjection::ResolveResult ModelBasedProjection::resolve(LIABoundLower 
         assert(d.isInteger());
         result.bounds.push_back(firstBound);
         PTRef modified = lialogic.mkNumPlus(s_term, lialogic.mkConst(d));
-        PTRef secondBound = lialogic.mkNumLeq(lialogic.mkNumTimes(a_term, modified),bt_term);
-        result.bounds.push_back(secondBound);
+        if (not d.isZero()) {
+            PTRef secondBound = lialogic.mkNumLeq(lialogic.mkNumTimes(a_term, modified), bt_term);
+            result.bounds.push_back(secondBound);
+        }
         result.constraint.constant = b_term;
         result.constraint.term = modified;
+        result.hasDivConstraint = true;
     } else {
         // case 3
         FastRational d = mbp_fastrat_fdiv_r(t, a);
         assert(d.isInteger());
         result.bounds.push_back(firstBound);
         PTRef modified = lialogic.mkNumMinus(t_term, lialogic.mkConst(d));
-        PTRef secondBound = lialogic.mkNumLeq(as_term, lialogic.mkNumTimes(b_term, modified));
-        result.bounds.push_back(secondBound);
+        if (not d.isZero()) {
+            PTRef secondBound = lialogic.mkNumLeq(as_term, lialogic.mkNumTimes(b_term, modified));
+            result.bounds.push_back(secondBound);
+        }
         result.constraint.constant = a_term;
         result.constraint.term = modified;
+        result.hasDivConstraint = true;
     }
     return result;
 }
