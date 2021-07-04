@@ -438,7 +438,7 @@ namespace {
 // TODO: replace when available in FastRationals
 FastRational mbp_fastrat_fdiv_r(FastRational const & n, FastRational const & d) {
     FastRational q = fastrat_fdiv_q(n, d);
-    FastRational u = d - (q*n);
+    FastRational u = n - (q*d);
     return u;
 }
 }
