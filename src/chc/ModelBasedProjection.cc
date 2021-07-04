@@ -608,8 +608,9 @@ void ModelBasedProjection::processClassicLiterals(PTRef var, div_constraints_t &
             PTRef lhs = glbCoeff.isOne() ? bound.term : lialogic.mkNumTimes(bound.term, greatestLowerBound->coeff);
             PTRef rhs = lialogic.getNumConst(bound.coeff).isOne() ? greatestLowerBound->term : lialogic.mkNumTimes(greatestLowerBound->term, bound.coeff);
             PTRef nBound = lialogic.mkNumLeq(lhs, rhs);
-            assert(nBound != lialogic.getTerm_true());
-            newLiterals.push_back(PtAsgn(nBound, l_True));
+            if (nBound != lialogic.getTerm_true()) { // This can happen when we have a stronger and weaker bound on the same term
+                newLiterals.push_back(PtAsgn(nBound, l_True));
+            }
         }
         // handle upper bounds
         for (auto const& bound : upper) {
