@@ -31,6 +31,17 @@ public:
         auto & components = boundMap[vid];
         components.insert(summary);
     }
+
+    bool has(VId vid, std::size_t bound, PTRef summary) {
+        ensureBound(bound);
+        auto const & boundMap = innerMap[bound];
+        auto it = boundMap.find(vid);
+        if (it != boundMap.end()) {
+            return it->second.find(summary) != it->second.end();
+        }
+        return false;
+    }
+
 private:
     std::vector<std::unordered_map<VId, std::unordered_set<PTRef, PTRefHash>, VertexHasher>> innerMap; // bound -> vertex -> conjuncts of approximation
 
@@ -470,6 +481,9 @@ bool SpacerContext::tryPushComponents(VId vid, std::size_t level, PTRef body) {
     MainSolver solver(logic, config, "inductive checker");
     solver.insertFormula(body);
     for (PTRef component : maySummaryComponents) {
+        if (over.has(vid, level + 1, component)) {
+            continue;
+        }
         PTRef nextStateComponent = TimeMachine(logic).sendFlaThroughTime(component, 1);
 //        std::cout << " Checking component " << logic.printTerm(nextStateComponent) << std::endl;
         solver.push();
