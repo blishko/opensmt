@@ -105,6 +105,8 @@ class SpacerContext {
 
     InductiveCheckResult isInductive(std::size_t currentBound);
 
+    bool tryPushComponents(VId , std::size_t, PTRef);
+
 
     enum class QueryAnswer {VALID, INVALID, ERROR, UNKNOWN};
     struct QueryResult {
@@ -432,7 +434,6 @@ SpacerContext::InductiveCheckResult SpacerContext::isInductive(std::size_t maxLe
 //        std::cout << "Checking level " << level << std::endl;
         for (VId vid : graph.getVertices()) {
 //            std::cout << " Checking vertex " << vid.id << std::endl;
-            auto maySummaryComponents = over.getComponents(vid, level);
             // encode body as disjunction over all the incoming edges
             vec<PTRef> edgeRepresentations;
             for (EId eid : incomingEdges(vid, graph)) {
@@ -448,16 +449,9 @@ SpacerContext::InductiveCheckResult SpacerContext::isInductive(std::size_t maxLe
 //            std::cout << "Body representation of " << vid.id << " at level " << level << " is " << logic.printTerm(body) << std::endl;
             // Figure out which components of the may summary are implied by body at level n and so can be pushed to level n+1
 //            std::cout << "Need to check " << maySummaryComponents.size() << " components for vertex " << vid.id << std::endl;
-            for (PTRef component : maySummaryComponents) {
-                PTRef nextStateComponent = TimeMachine(logic).sendFlaThroughTime(component, 1);
-//                std::cout << " Checking component " << logic.printTerm(nextStateComponent) << std::endl;
-                auto res = implies(body, nextStateComponent);
-                if (res.answer == QueryAnswer::VALID) {
-                    over.insert(vid, level + 1, component);
-                } else {
-                    inductive = false;
-                }
-            }
+            bool allPushed = tryPushComponents(vid, level, body);
+            inductive = inductive and allPushed;
+            // TODO does it make sense to push other vertices if I already know the current level is not inductive?
         }
         if (inductive) {
             return InductiveCheckResult{InductiveCheckAnswer::INDUCTIVE, level};
@@ -465,6 +459,34 @@ SpacerContext::InductiveCheckResult SpacerContext::isInductive(std::size_t maxLe
     }
     return InductiveCheckResult{InductiveCheckAnswer::NOT_INDUCTIVE, 0};
 }
+
+bool SpacerContext::tryPushComponents(VId vid, std::size_t level, PTRef body) {
+    auto maySummaryComponents = over.getComponents(vid, level);
+    bool allPushed = true;
+    SMTConfig config;
+    const char* msg = "ok";
+    config.setOption(SMTConfig::o_produce_models, SMTOption(false), msg);
+    config.setOption(SMTConfig::o_produce_inter, SMTOption(false), msg);
+    MainSolver solver(logic, config, "inductive checker");
+    solver.insertFormula(body);
+    for (PTRef component : maySummaryComponents) {
+        PTRef nextStateComponent = TimeMachine(logic).sendFlaThroughTime(component, 1);
+//        std::cout << " Checking component " << logic.printTerm(nextStateComponent) << std::endl;
+        solver.push();
+        solver.insertFormula(logic.mkNot(nextStateComponent));
+        auto res = solver.check();
+        if (res == s_False) {
+            over.insert(vid, level + 1, component);
+        } else {
+            allPushed = false;
+        }
+        solver.pop();
+    }
+    return allPushed;
+}
+
+
+
 
 PTRef SpacerContext::projectFormula(PTRef fla, const vec<PTRef> &toVars, Model *model) {
     if (not model) {
