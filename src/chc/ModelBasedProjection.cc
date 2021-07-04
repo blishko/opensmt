@@ -663,6 +663,11 @@ void ModelBasedProjection::processClassicLiterals(PTRef var, div_constraints_t &
                 newLiterals.push_back(PtAsgn(newLit, l_True));
             }
         }
+        // From the equality ax = t it also follows that t must be divisible by a
+        assert(lialogic.getNumConst(eqBound.coeff).sign() > 0);
+        if (eqBound.coeff != lialogic.getTerm_NumOne()) {
+            divConstraints.push_back(DivisibilityConstraint{.constant = eqBound.coeff, .term = eqBound.term});
+        }
         // add literals not containing the variable
         newLiterals.insert(newLiterals.end(), interestingEnd, implicant.end());
         implicant = std::move(newLiterals);

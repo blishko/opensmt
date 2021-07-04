@@ -447,3 +447,24 @@ TEST_F(MBP_IntTest, test_Equality) {
     std::cout << logic.pp(res) << std::endl;
     EXPECT_EQ(res, logic.mkAnd(logic.mkNumLeq(x, two), logic.mkNumLeq(two, z)));
 }
+
+TEST_F(MBP_IntTest, test_EqualityWithCoefficients) {
+    PTRef two = logic.mkConst(FastRational(2));
+    PTRef three = logic.mkConst(FastRational(3));
+    PTRef x2 = logic.mkNumTimes(x, two);
+    PTRef x3 = logic.mkNumTimes(x, three);
+    PTRef lit1 = logic.mkEq(x2,y);
+    PTRef lit2 = logic.mkNumLeq(z,x3);
+    PTRef fla = logic.mkAnd({lit1, lit2});
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, zero);
+    builder.addVarValue(y, zero);
+    builder.addVarValue(z, logic.getTerm_NumMinusOne());
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {x}, *model);
+    std::cout << logic.pp(res) << std::endl;
+    EXPECT_EQ(res,logic.mkAnd(
+        logic.mkNumLeq(logic.mkNumTimes(z, two), logic.mkNumTimes(three, y)),
+        logic.mkEq(zero, logic.mkIntMod(y, two))
+    ));
+}
