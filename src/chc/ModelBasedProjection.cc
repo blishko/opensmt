@@ -608,13 +608,15 @@ void ModelBasedProjection::processClassicLiterals(PTRef var, div_constraints_t &
             PTRef lhs = glbCoeff.isOne() ? bound.term : lialogic.mkNumTimes(bound.term, greatestLowerBound->coeff);
             PTRef rhs = lialogic.getNumConst(bound.coeff).isOne() ? greatestLowerBound->term : lialogic.mkNumTimes(greatestLowerBound->term, bound.coeff);
             PTRef nBound = lialogic.mkNumLeq(lhs, rhs);
+            assert(nBound != lialogic.getTerm_true());
             newLiterals.push_back(PtAsgn(nBound, l_True));
         }
         // handle upper bounds
         for (auto const& bound : upper) {
             auto res = resolve(*greatestLowerBound, bound, model, lialogic);
-            assert(res.bounds.size() <= 2 and not res.bounds.empty());
+            assert(res.bounds.size() <= 2);
             for (PTRef nBound : res.bounds) {
+                assert(nBound != lialogic.getTerm_true());
                 newLiterals.push_back(PtAsgn(nBound, l_True));
             }
             if (res.hasDivConstraint) {
@@ -704,20 +706,25 @@ ModelBasedProjection::ResolveResult ModelBasedProjection::resolve(LIABoundLower 
     if (mul <= (b*t - a*s)) {
         // case 1
         PTRef nBound = lialogic.mkNumLeq(lialogic.mkNumPlus(as_term, lialogic.mkConst(mul)), bt_term);
-        result.bounds.push_back(nBound);
+        if (nBound != lialogic.getTerm_true()) {
+            result.bounds.push_back(nBound);
+        }
         result.hasDivConstraint = false;
         return result;
     }
 
     PTRef firstBound = lialogic.mkNumLeq(as_term, bt_term);
+    if (firstBound != lialogic.getTerm_true()) {
+        result.bounds.push_back(firstBound);
+    }
     if (a >= b) {
         // case 2
         FastRational d = mbp_fastrat_fdiv_r(-s, b);
         assert(d.isInteger());
-        result.bounds.push_back(firstBound);
         PTRef modified = lialogic.mkNumPlus(s_term, lialogic.mkConst(d));
         if (not d.isZero()) {
             PTRef secondBound = lialogic.mkNumLeq(lialogic.mkNumTimes(a_term, modified), bt_term);
+            assert(secondBound != lialogic.getTerm_true());
             result.bounds.push_back(secondBound);
         }
         result.constraint.constant = b_term;
@@ -727,10 +734,10 @@ ModelBasedProjection::ResolveResult ModelBasedProjection::resolve(LIABoundLower 
         // case 3
         FastRational d = mbp_fastrat_fdiv_r(t, a);
         assert(d.isInteger());
-        result.bounds.push_back(firstBound);
         PTRef modified = lialogic.mkNumMinus(t_term, lialogic.mkConst(d));
         if (not d.isZero()) {
             PTRef secondBound = lialogic.mkNumLeq(as_term, lialogic.mkNumTimes(b_term, modified));
+            assert(secondBound != lialogic.getTerm_true());
             result.bounds.push_back(secondBound);
         }
         result.constraint.constant = a_term;
