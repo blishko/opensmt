@@ -788,11 +788,20 @@ bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
     assert(power >= 2);
     for (unsigned short i = 2; i <= power; ++i) {
         PTRef currentLevelTransition = getExactPower(i);
+        PTRef currentTwoStep = logic.mkAnd(currentLevelTransition, getNextVersion(currentLevelTransition));
+        PTRef shifted = shiftOnlyNextVars(currentLevelTransition);
         SMTConfig config;
         MainSolver solver(logic, config, "Fixed-point checker");
-        PTRef currentTwoStep = logic.mkAnd(currentLevelTransition, getNextVersion(currentLevelTransition));
-        solver.insertFormula(logic.mkAnd({currentTwoStep, logic.mkNot(shiftOnlyNextVars(currentLevelTransition))}));
-        auto satres = solver.check();
+        solver.insertFormula(logic.mkAnd({currentTwoStep, logic.mkNot(shifted)}));
+        sstat satres = solver.check();
+        if (satres != s_False) {
+            solver.push();
+            solver.insertFormula(getNextVersion(logic.mkAnd(init, getLessThanPower(i)), -1));
+            satres = solver.check();
+            if (satres == s_False) {
+                std::cout << "Safety proved with the restricted check!" << std::endl;
+            }
+        }
         if (satres == s_False) {
 //            std::cout << "Fixed point detected in exact relation on level " << i << " from " << power << std::endl;
             if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
@@ -860,11 +869,13 @@ PTRef AcceleratedBmc::kinductiveToInductive(PTRef invariant, unsigned long k) {
     vec<PTRef> helpers;
     helpers.push(PTRef_Undef);
     // step 1
+//    std::cout << "Step 1 out of " << k << std::endl;
     PTRef afterElimination = QuantifierElimination(logic).keepOnly(logic.mkAnd(transition, logic.mkNot(getNextVersion(invariant))), stateVars);
     resArgs.push(logic.mkNot(afterElimination));
     helpers.push(transition);
     // steps 2 to k-1
     for (unsigned long i = 2; i < k; ++i) {
+//        std::cout << "Step " << i << " out of " << k << std::endl;
         PTRef helper = logic.mkAnd({helpers[i-1], getNextVersion(invariant, i-1), getNextVersion(transition, i-1)});
         helper = QuantifierElimination(logic).eliminate(helper, getStateVars(i-1));
         helpers.push(helper);
