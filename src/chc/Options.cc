@@ -19,6 +19,7 @@ const std::string Options::COMPUTE_WITNESS = "compute-witness";
 const std::string Options::PRINT_WITNESS = "print-witness";
 const std::string Options::LRA_ITP_ALG = "lra-itp-algorithm";
 const std::string Options::FORCED_COVERING = "forced-covering";
+const std::string Options::VERBOSE = "verbose";
 
 namespace{
 bool isDisableKeyword(const char* word) {
@@ -35,6 +36,7 @@ Options CommandLineParser::parse(int argc, char ** argv) {
     int computeWitness = 0;
     int lraItpAlg = 0;
     int forcedCovering = 0;
+    int verbose = 0;
 
     struct option long_options[] =
         {
@@ -48,12 +50,13 @@ Options CommandLineParser::parse(int argc, char ** argv) {
             {Options::COMPUTE_WITNESS.c_str(), optional_argument, &computeWitness, 1},
             {Options::LRA_ITP_ALG.c_str(), required_argument, &lraItpAlg, 0},
             {Options::FORCED_COVERING.c_str(), optional_argument, &forcedCovering, 1},
+            {Options::VERBOSE.c_str(), optional_argument, &verbose, 1},
             {0, 0, 0, 0}
         };
     while (true) {
         int option_index = 0;
 
-        int c = getopt_long(argc, argv, "e:l:i:f:", long_options, &option_index);
+        int c = getopt_long(argc, argv, "e:l:i:f:v", long_options, &option_index);
         if (c == -1) { break; }
 
         switch (c) {
@@ -76,6 +79,10 @@ Options CommandLineParser::parse(int argc, char ** argv) {
                     assert(optarg);
                     lraItpAlg = std::atoi(optarg);
                 }
+                else if (long_options[option_index].flag == &verbose) {
+                    assert(optarg);
+                    verbose = std::atoi(optarg);
+                }
                 break;
             case 'e':
                 res.addOption(Options::ENGINE, optarg);
@@ -91,6 +98,9 @@ Options CommandLineParser::parse(int argc, char ** argv) {
                 break;
             case 'f':
                 res.addOption(Options::ANALYSIS_FLOW, optarg);
+                break;
+            case 'v':
+                ++verbose;
                 break;
             default:
                 abort();
@@ -120,6 +130,7 @@ Options CommandLineParser::parse(int argc, char ** argv) {
         res.addOption(Options::FORCED_COVERING, "true");
     }
     res.addOption(Options::LRA_ITP_ALG, std::to_string(lraItpAlg));
+    res.addOption(Options::VERBOSE, std::to_string(verbose));
 
     return res;
 }

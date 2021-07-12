@@ -35,6 +35,7 @@ public:
     static const std::string PRINT_WITNESS;
     static const std::string LRA_ITP_ALG;
     static const std::string FORCED_COVERING;
+    static const std::string VERBOSE;
 };
 
 class CommandLineParser {
