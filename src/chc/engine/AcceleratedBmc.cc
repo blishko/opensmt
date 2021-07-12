@@ -430,6 +430,12 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
 //        std::cout << "Checking less-than reachability on level " << power << " from " << logic.printTerm(from) << " to " << logic.printTerm(to) << std::endl;
     TRACE(2,"Checking less-than reachability on level " << power << " from " << from.x << " to " << to.x)
     assert(power >= 1);
+    if (from == to) {
+        QueryResult result;
+        result.result = ReachabilityResult::REACHABLE;
+        result.refinedTarget = to;
+        return result;
+    }
     if (power == 1) {
         return reachabilityExactZeroStep(from, to);
     }
