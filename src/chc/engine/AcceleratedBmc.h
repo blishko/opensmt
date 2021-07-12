@@ -58,6 +58,8 @@ public:
     };
 
 private:
+    std::unordered_map<std::pair<PTRef, PTRef>, QueryResult, PTRefPairHash> exactQueryLvl2;
+
     GraphVerificationResult solveTransitionSystem(TransitionSystem & system, ChcDirectedGraph const & graph);
 
     void resetTransitionSystem(TransitionSystem const & system);
