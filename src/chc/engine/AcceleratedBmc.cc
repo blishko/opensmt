@@ -229,6 +229,7 @@ vec<PTRef> AcceleratedBmc::getStateVars(int version) {
 
 GraphVerificationResult AcceleratedBmc::solveTransitionSystem(TransitionSystem & system, ChcDirectedGraph const & graph) {
     resetTransitionSystem(system);
+    exactQueryCache.emplace_back();
     unsigned short power = 1;
     while (true) {
         auto res = checkPower(power);
@@ -290,6 +291,7 @@ VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
             }
         }
     }
+    exactQueryCache.emplace_back();
     // Second compute the exact power using the concatenation of previous one
     res = reachabilityQueryExact(init, query, power);
     if (isReachable(res)) {
@@ -349,12 +351,11 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
     if (power == 1) { // Basic check with real transition relation
         return reachabilityExactOneStep(from, to);
     }
-    if (power == 2) {
-        auto it = exactQueryLvl2.find({from, to});
-        if (it != exactQueryLvl2.end()) {
-            TRACE(1, "Query found in cache!")
-            return it->second;
-        }
+    assert(exactQueryCache.size() > power);
+    auto it = exactQueryCache[power].find({from, to});
+    if (it != exactQueryCache[power].end()) {
+        TRACE(1, "Query found in cache on level " << power)
+        return it->second;
     }
     QueryResult result;
     PTRef goal = getNextVersion(to, 2);
@@ -375,7 +376,7 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
                     result.result = ReachabilityResult::REACHABLE;
                     result.refinedTarget = getNextVersion(refineTwoStepTarget(from, logic.mkAnd(previousTransition, translatedPreviousTransition), goal, *model), -2);
                     TRACE(3, "Exact: Truly reachable states are " << result.refinedTarget.x)
-                    exactQueryLvl2.insert({{from, to}, result});
+                    exactQueryCache[power].insert({{from, to}, result});
                     return result;
                 }
                 // Create the three states corresponding to current, next and next-next variables from the query
@@ -409,6 +410,7 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
                 assert(isReachable(subQueryRes));
                 TRACE(3, "Exact: Second half was reachable, reachable states are " << extractReachableTarget(subQueryRes).x)
                 // both halves of the found path are feasible => this path is feasible!
+                exactQueryCache[power].insert({{from, to}, subQueryRes});
                 return subQueryRes;
             }
             case ReachabilityResult::UNREACHABLE:
