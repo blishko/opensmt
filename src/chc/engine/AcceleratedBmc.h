@@ -58,7 +58,8 @@ public:
     };
 
 private:
-    std::unordered_map<std::pair<PTRef, PTRef>, QueryResult, PTRefPairHash> exactQueryLvl2;
+    using CacheType = std::unordered_map<std::pair<PTRef, PTRef>, QueryResult, PTRefPairHash>;
+    std::vector<CacheType> exactQueryCache;
 
     GraphVerificationResult solveTransitionSystem(TransitionSystem & system, ChcDirectedGraph const & graph);
 
