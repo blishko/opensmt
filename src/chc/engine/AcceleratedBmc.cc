@@ -10,6 +10,10 @@
 
 #include "MainSolver.h"
 
+#define TRACE_LEVEL 0
+
+#define TRACE(l,m) if (TRACE_LEVEL >= l) {std::cout << m << std::endl; }
+
 class SolverWrapperSingleUse : public SolverWrapper {
     Logic & logic;
     SMTConfig config;
@@ -268,7 +272,7 @@ PTRef extractReachableTarget (AcceleratedBmc::QueryResult res) { return res.refi
 
 VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
     assert(power > 0);
-//    std::cout << "Checking power " << power << std::endl;
+    TRACE(1, "Checking power " << power)
     // First compute the <2^n transition relation using information from previous level;
     auto res = reachabilityQueryLessThan(init, query, power);
     if (isReachable(res)) {
@@ -339,47 +343,50 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityExactZeroStep(PTRef from
  * If 'to' is unreachable, we interpolate over the 2 step transition to obtain 1-step transition of level n.
  */
 AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, PTRef to, unsigned short power) {
-//    std::cout << "Checking exact reachability on level " << power << std::endl;
 //        std::cout << "Checking exact reachability on level " << power << " from " << logic.printTerm(from) << " to " << logic.printTerm(to) << std::endl;
-//    std::cout << "Checking exact reachability on level " << power << " from " << from.x << " to " << to.x << std::endl;
+    TRACE(2,"Checking exact reachability on level " << power << " from " << from.x << " to " << to.x)
     assert(power >= 1);
     if (power == 1) { // Basic check with real transition relation
         return reachabilityExactOneStep(from, to);
     }
     QueryResult result;
     PTRef goal = getNextVersion(to, 2);
-//    unsigned counter = 0;
+    unsigned counter = 0;
     while(true) {
-//        std::cout << "Exact: Iteration " << ++counter << " on level " << power << std::endl;
+        TRACE(3, "Exact: Iteration " << ++counter << " on level " << power)
         auto solver = getExactReachabilitySolver(power);
         assert(solver);
         auto res = solver->checkConsistent(logic.mkAnd(from, goal));
         switch (res) {
             case ReachabilityResult::REACHABLE:
             {
+                TRACE(3, "Top level query was reachable")
                 PTRef previousTransition = getExactPower(power - 1);
                 PTRef translatedPreviousTransition = getNextVersion(previousTransition);
                 auto model = solver->lastQueryModel();
                 if (power == 2) { // Base case, the 2 steps of the exact transition relation have been used
                     result.result = ReachabilityResult::REACHABLE;
                     result.refinedTarget = getNextVersion(refineTwoStepTarget(from, logic.mkAnd(previousTransition, translatedPreviousTransition), goal, *model), -2);
+                    TRACE(3, "Exact: Truly reachable states are " << result.refinedTarget.x)
                     return result;
                 }
                 // Create the three states corresponding to current, next and next-next variables from the query
 //              PTRef modelMidpoint = getNextVersion(extractStateFromModel(getStateVars(1), *model), -1);
                 PTRef nextState = getNextVersion(extractMidPoint(from, previousTransition, translatedPreviousTransition, goal, *model), -1);
 //              std::cout << "Midpoint single point: " << logic.printTerm(modelMidpoint) << '\n';
-//                std::cout << "Midpoint from MBP: " << logic.printTerm(nextState) << std::endl;
+                TRACE(3,"Midpoint from MBP: " << nextState.x)
                 // check the reachability using lower level abstraction
                 auto subQueryRes = reachabilityQueryExact(from, nextState, power - 1);
                 if (isUnreachable(subQueryRes)) {
+                    TRACE(3, "Exact: First half was unreachable, repeating...")
                     assert(getExactPower(power - 1) != previousTransition);
                     continue; // We need to re-check this level with refined abstraction
                 } else {
                     assert(isReachable(subQueryRes));
                     // TODO: check that this is really a subset of the original midpoint
+                    TRACE(3, "Exact: First half was reachable")
                     nextState = extractReachableTarget(subQueryRes);
-//                    std::cout << "Midpoint from MBP - part 2: " << logic.printTerm(nextState) << std::endl;
+                    TRACE(3, "Midpoint from MBP - part 2: " << nextState.x)
                     if (nextState == PTRef_Undef) {
                         throw std::logic_error("Refined reachable target not set in subquery!");
                     }
@@ -387,20 +394,24 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
                 // here the first half of the found path is feasible, check the second half
                 subQueryRes = reachabilityQueryExact(nextState, to, power - 1);
                 if (isUnreachable(subQueryRes)) {
+                    TRACE(3, "Exact: Second half was unreachable, repeating...")
                     assert(getExactPower(power - 1) != previousTransition);
                     continue; // We need to re-check this level with refined abstraction
                 }
                 assert(isReachable(subQueryRes));
+                TRACE(3, "Exact: Second half was reachable, reachable states are " << extractReachableTarget(subQueryRes).x)
                 // both halves of the found path are feasible => this path is feasible!
                 return subQueryRes;
             }
             case ReachabilityResult::UNREACHABLE:
             {
+                TRACE(3, "Top level query was unreachable")
                 PTRef itp = solver->lastQueryTransitionInterpolant();
                 itp = cleanInterpolant(itp);
 //                std::cout << "Strenghtening representation of exact reachability on level " << power << " :";
 //                TermUtils(logic).printTermWithLets(std::cout, itp);
 //                std::cout << std::endl;
+                TRACE(3, "Learning " << itp.x)
                 storeExactPower(power, itp);
                 result.result = ReachabilityResult::UNREACHABLE;
                 return result;
@@ -416,8 +427,8 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
  * If 'to' is unreachable, we interpolate over the 2 step transition to obtain 1-step transition of level n.
  */
 AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from, PTRef to, unsigned short power) {
-//    std::cout << "Checking less-than reachability on level " << power << std::endl;
 //        std::cout << "Checking less-than reachability on level " << power << " from " << logic.printTerm(from) << " to " << logic.printTerm(to) << std::endl;
+    TRACE(2,"Checking less-than reachability on level " << power << " from " << from.x << " to " << to.x)
     assert(power >= 1);
     if (power == 1) {
         return reachabilityExactZeroStep(from, to);
@@ -425,9 +436,9 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
     QueryResult result;
     assert(power >= 2);
     PTRef goal = getNextVersion(to, 2);
-//    unsigned counter = 0;
+    unsigned counter = 0;
     while(true) {
-//        std::cout << "Less-than: Iteration " << ++counter << " on level " << power << std::endl;
+        TRACE(3, "Less-than: Iteration " << ++counter << " on level " << power)
         SMTConfig config;
         const char * msg = "ok";
 //        config.setOption(SMTConfig::o_verbosity, SMTOption(1), msg);
@@ -449,6 +460,7 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
         solver.insertFormula(logic.mkAnd(from, goal));
         auto res = solver.check();
         if (res == s_False) {
+            TRACE(3, "Top level query was unreachable")
             auto itpContext = solver.getInterpolationContext();
             vec<PTRef> itps;
             ipartitions_t mask = 1;
@@ -460,23 +472,29 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
             PTRef itp = logic.mkAnd(itps);
             // replace next-next variables with next-variables
             itp = cleanInterpolant(itp);
+            TRACE(3, "Learning " << itp.x)
             storeLessThanPower(power, itp);
             result.result = ReachabilityResult::UNREACHABLE;
             return result;
         } else if (res == s_True) {
+            TRACE(3, "Top level query was reachable")
             auto model = solver.getModel();
             if (model->evaluate(currentToNextNextPreviousLessThanTransition) == logic.getTerm_true()) {
                 // First disjunct was responsible for the positive answer, check it
+                TRACE(3, "First disjunct was satisfiable")
                 if (power == 2) { // This means the goal is reachable in 0 steps, no need to re-check anythin
                     // TODO: double-check this
                     result.result = ReachabilityResult::REACHABLE;
                     result.refinedTarget = logic.mkAnd(from, to); // TODO: check if this is needed
+                    TRACE(3, "Less-than: Truly reachable states are " << result.refinedTarget.x)
                     return result;
                 }
                 auto subQueryRes = reachabilityQueryLessThan(from, to, power - 1);
                 if (isReachable(subQueryRes)) {
+                    TRACE(3, "Less-than: First half was reachable!")
                     return subQueryRes;
                 } else {
+                    TRACE(3, "Less-than: First half was unreachable, repeating...")
                     assert(isUnreachable(subQueryRes));
                     assert(getLessThanPower(power - 1) != previousLessThanTransition);
                     continue;
@@ -484,35 +502,41 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
             } else {
                 // Second disjunct was responsible for the positive answer
                 assert(model->evaluate(logic.mkAnd(previousLessThanTransition, translatedExactTransition)) == logic.getTerm_true());
+                TRACE(3, "Second disjunct was satisfiable")
                 if (power == 2) { // Since it was not reachable in 0 steps (checked above), here it means it was reachable in exactly 1 step
                     result.result = ReachabilityResult::REACHABLE;
                     // TODO: this could be simplified, but I need refineOneStepTarget
                     result.refinedTarget = getNextVersion(refineTwoStepTarget(from, logic.mkAnd(previousLessThanTransition, translatedExactTransition), goal, *model), -2);
+                    TRACE(3, "Less-than: Truly reachable states are " << result.refinedTarget.x)
                     return result;
                 }
                 PTRef nextState = getNextVersion(extractMidPoint(from, previousLessThanTransition, translatedExactTransition, goal, *model), -1);
-//                std::cout << "Midpoint is " << logic.printTerm(nextState) << std::endl;
+                TRACE(3, "Midpoint is " << nextState.x)
                 // check the reachability using lower level abstraction
                 auto subQueryRes = reachabilityQueryLessThan(from, nextState, power - 1);
                 if (isUnreachable(subQueryRes)) {
+                    TRACE(3, "Less-than: First half was unreachable, repeating...")
                     assert(getLessThanPower(power - 1) != previousLessThanTransition);
                     continue; // We need to re-check this level with refined abstraction
                 } else {
                     assert(isReachable(subQueryRes));
+                    TRACE(3, "Less-than: First half was reachable!")
                     nextState = extractReachableTarget(subQueryRes);
                     if (nextState == PTRef_Undef) {
                         throw std::logic_error("Refined reachable target not set in subquery!");
                     }
-//                    std::cout << "Modified midpoint is " << logic.printTerm(nextState) << std::endl;
+                    TRACE(3, "Modified midpoint : " << nextState.x)
                 }
                 // here the first half of the found path is feasible, check the second half
                 PTRef previousExactTransition = getExactPower(power - 1);
                 subQueryRes = reachabilityQueryExact(nextState, to, power - 1);
                 if (isUnreachable(subQueryRes)) {
                     assert(getExactPower(power - 1) != previousExactTransition);
+                    TRACE(3, "Less-than: Second half was unreachable, repeating...")
                     continue; // We need to re-check this level with refined abstraction
                 }
                 assert(isReachable(subQueryRes));
+                TRACE(3, "Less-than: Second half was reachable, reachable states are " << extractReachableTarget(subQueryRes).x)
                 // both halves of the found path are feasible => this path is feasible!
                 return subQueryRes;
             }
