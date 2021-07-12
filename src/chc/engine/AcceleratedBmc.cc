@@ -349,6 +349,13 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
     if (power == 1) { // Basic check with real transition relation
         return reachabilityExactOneStep(from, to);
     }
+    if (power == 2) {
+        auto it = exactQueryLvl2.find({from, to});
+        if (it != exactQueryLvl2.end()) {
+            TRACE(1, "Query found in cache!")
+            return it->second;
+        }
+    }
     QueryResult result;
     PTRef goal = getNextVersion(to, 2);
     unsigned counter = 0;
@@ -368,6 +375,7 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
                     result.result = ReachabilityResult::REACHABLE;
                     result.refinedTarget = getNextVersion(refineTwoStepTarget(from, logic.mkAnd(previousTransition, translatedPreviousTransition), goal, *model), -2);
                     TRACE(3, "Exact: Truly reachable states are " << result.refinedTarget.x)
+                    exactQueryLvl2.insert({{from, to}, result});
                     return result;
                 }
                 // Create the three states corresponding to current, next and next-next variables from the query
