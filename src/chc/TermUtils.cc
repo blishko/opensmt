@@ -302,7 +302,7 @@ bool LATermUtils::termContainsVar(PTRef term, PTRef var) {
 }
 
 bool LATermUtils::atomContainsVar(PTRef atom, PTRef var) {
-    if (logic.isBoolAtom(atom)) { return false;}
+    if (logic.isBoolAtom(atom) or logic.isConstant(atom)) { return false;}
     assert(logic.isNumLeq(atom) || logic.isNumEq(atom));
     if (logic.isNumEq(atom)) {
         PTRef lhs = logic.getPterm(atom)[0];
