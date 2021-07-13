@@ -659,8 +659,14 @@ void AcceleratedBmc::resetTransitionSystem(TransitionSystem const & system) {
 //    std::cout << "Query: " << logic.printTerm(query) << std::endl;
 }
 
-PTRef AcceleratedBmc::getNextVersion(PTRef currentVersion, int shift) {
-    return TimeMachine(logic).sendFlaThroughTime(currentVersion, shift);
+PTRef AcceleratedBmc::getNextVersion(PTRef currentVersion, int shift) const {
+    auto it = versioningCache.find({currentVersion, shift});
+    if (it != versioningCache.end()) {
+        return it->second;
+    }
+    PTRef res = TimeMachine(logic).sendFlaThroughTime(currentVersion, shift);
+    versioningCache.insert({{currentVersion, shift}, res});
+    return res;
 }
 
 /*

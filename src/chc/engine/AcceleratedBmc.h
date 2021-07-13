@@ -61,6 +61,13 @@ private:
     using CacheType = std::unordered_map<std::pair<PTRef, PTRef>, QueryResult, PTRefPairHash>;
     std::vector<CacheType> exactQueryCache;
 
+    struct VersionHasher {
+        std::size_t operator()(std::pair<PTRef, int> val) const {
+            return std::hash<uint32_t>()(val.first.x) ^ std::hash<int>()(val.second);
+        }
+    };
+    mutable std::unordered_map<std::pair<PTRef, int>, PTRef, VersionHasher> versioningCache;
+
     GraphVerificationResult solveTransitionSystem(TransitionSystem & system, ChcDirectedGraph const & graph);
 
     void resetTransitionSystem(TransitionSystem const & system);
@@ -79,8 +86,8 @@ private:
 
     SolverWrapper* getExactReachabilitySolver(unsigned short power) const;
 
-    PTRef getNextVersion(PTRef currentVersion, int);
-    PTRef getNextVersion(PTRef currentVersion) { return getNextVersion(currentVersion, 1); };
+    PTRef getNextVersion(PTRef currentVersion, int) const ;
+    PTRef getNextVersion(PTRef currentVersion) const { return getNextVersion(currentVersion, 1); };
 
     vec<PTRef> getStateVars(int version);
 
