@@ -148,8 +148,33 @@ public:
 class TimeMachine {
     Logic & logic;
     const std::string versionSeparator = "##";
+
+    class VersioningConfig : public DefaultRewriterConfig {
+        TimeMachine & owner;
+        Logic const & logic;
+        int versioningNumber = 0;
+    public:
+        VersioningConfig(TimeMachine & machine, Logic const & logic) : owner(machine), logic(logic) {}
+
+        void setVersioningNumber(int number) { versioningNumber = number; }
+
+        PTRef rewrite(PTRef term) override {
+            if (logic.isVar(term)) {
+                return owner.sendVarThroughTime(term, versioningNumber);
+            }
+            return term;
+        }
+    };
+
+    class VersioningRewriter : public Rewriter<VersioningConfig> {
+    public:
+        VersioningRewriter(Logic & logic, VersioningConfig & config) : Rewriter<VersioningConfig>(logic, config) {}
+    };
+
+    VersioningConfig config;
+
 public:
-    TimeMachine(Logic & logic) : logic(logic) {}
+    TimeMachine(Logic & logic) : logic(logic), config(*this, logic) {}
     // Returns version of var 'steps' steps in the future (if positive) or in the past (if negative)
     PTRef sendVarThroughTime(PTRef var, int steps) const {
         assert(logic.isVar(var));
@@ -188,16 +213,9 @@ public:
 
     PTRef sendFlaThroughTime(PTRef fla, int steps) {
         if (steps == 0) { return fla; }
-        TermUtils utils(logic);
-        std::unordered_map<PTRef, PTRef, PTRefHash> varsMap;
-        auto vars = utils.getVars(fla);
-        for (PTRef var : vars) {
-            assert(isVersioned(var));
-            PTRef changed = sendVarThroughTime(var, steps);
-            varsMap.insert({var, changed});
-        }
-        PTRef substituted = utils.varSubstitute(fla, varsMap);
-        return substituted;
+        config.setVersioningNumber(steps);
+        VersioningRewriter rewriter(logic, config);
+        return rewriter.rewrite(fla);
     }
 
     bool isVersioned(PTRef var) const {
