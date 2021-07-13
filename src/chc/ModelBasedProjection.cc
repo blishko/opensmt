@@ -145,6 +145,19 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
         return utils.atomContainsVar(lit.tr, var);
     };
 
+    // Normalize equalities (this would be better to ensure some other way)
+    std::for_each(implicant.begin(), implicant.end(), [lalogic](PtAsgn & lit) {
+       if (lalogic->isEquality(lit.tr)) {
+           PTRef lhs = lalogic->getPterm(lit.tr)[0];
+           PTRef rhs = lalogic->getPterm(lit.tr)[1];
+           if (lhs == lalogic->getTerm_NumZero() or rhs == lalogic->getTerm_NumZero() or lalogic->isNumConst(lhs) or lalogic->isNumConst(rhs)) {
+               // already normalized
+               return;
+           }
+           lit.tr = lalogic->mkEq(lalogic->mkNumMinus(lhs, rhs), lalogic->getTerm_NumZero());
+       }
+    });
+
     // split the literals to those containing var and those not containing var
     auto interestingEnd = std::partition(implicant.begin(), implicant.end(), containsVar);
     // preprocessing
