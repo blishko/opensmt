@@ -140,10 +140,6 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
         throw std::logic_error("Projection for other than Reals or Ints not supported");
     }
     // proper elimination of Real variable
-    LATermUtils utils(*lalogic);
-    auto containsVar = [var, &utils](PtAsgn lit) {
-        return utils.atomContainsVar(lit.tr, var);
-    };
 
     // Normalize equalities (this would be better to ensure some other way)
     std::for_each(implicant.begin(), implicant.end(), [lalogic](PtAsgn & lit) {
@@ -157,6 +153,11 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
            lit.tr = lalogic->mkEq(lalogic->mkNumMinus(lhs, rhs), lalogic->getTerm_NumZero());
        }
     });
+
+    LATermUtils utils(*lalogic);
+    auto containsVar = [var, &utils](PtAsgn lit) {
+        return utils.atomContainsVar(lit.tr, var);
+    };
 
     // split the literals to those containing var and those not containing var
     auto interestingEnd = std::partition(implicant.begin(), implicant.end(), containsVar);
