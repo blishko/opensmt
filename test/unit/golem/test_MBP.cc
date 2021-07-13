@@ -324,6 +324,19 @@ TEST_F(MBP_RealTest, test_avoidRedundantBounds) {
     EXPECT_EQ(res, logic.mkNumLeq(x, zero)); // The redundant bound x <= 1 should not appear in the projection
 }
 
+TEST_F(MBP_RealTest, test_EqualityNotNormalized) {
+    // x + y = x + 1
+    PTRef lit = logic.mkEq(logic.mkNumPlus(x,y), logic.mkNumPlus(x, one));
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, one);
+    builder.addVarValue(y, one);
+    auto model = builder.build();
+    PTRef res = mbp.project(lit, {x}, *model);
+    std::cout << logic.printTerm(res) << std::endl;
+    // EXPECT_EQ(res, logic.mkEq(y,one));
+     EXPECT_EQ(res, logic.mkEq(logic.mkNumPlus(y, logic.getTerm_NumMinusOne()), zero));
+}
+
 
 class MBP_IntTest : public ::testing::Test {
 protected:

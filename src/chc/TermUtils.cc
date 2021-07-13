@@ -65,13 +65,14 @@ PTRef TrivialQuantifierElimination::tryGetSubstitutionFromEquality(PTRef var, PT
 
 PTRef LATermUtils::expressZeroTermFor(PTRef zeroTerm, PTRef var) {
     assert(logic.isLinearTerm(zeroTerm) and logic.isNumVar(var));
+    assert(termContainsVar(zeroTerm, var));
     // split the zeroTerm to the factor with the variable 'var' and rest
     if (logic.isLinearFactor(zeroTerm)) {
         // simple case of 'c * v = 0', the resulting term is simply zero
         return logic.getTerm_NumZero();
     } else {
         assert(logic.isNumPlus(zeroTerm));
-        PTRef varCoeff;
+        PTRef varCoeff = PTRef_Undef;
         vec<PTRef> otherFactors;
         auto size = logic.getPterm(zeroTerm).size();
         for (int i = 0; i < size; ++i) {
@@ -86,6 +87,7 @@ PTRef LATermUtils::expressZeroTermFor(PTRef zeroTerm, PTRef var) {
                 otherFactors.push(factor);
             }
         }
+        assert(varCoeff != PTRef_Undef);
         // now we have 't = 0' where 't = c * var + t1' => 'var = t1/-c'
         PTRef res = logic.mkNumDiv(logic.mkNumPlus(otherFactors), logic.mkNumNeg(varCoeff));
         return res;
