@@ -308,7 +308,8 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
 }
 
 namespace{
-void collectImplicant(Logic & logic, PTRef fla, Model & model, std::vector<char> & processed, std::vector<PtAsgn>& literals) {
+void collectImplicant(Logic & logic, PTRef fla, Model & model, std::vector<char> & processed, std::vector<PtAsgn>& literals,
+                      ModelBasedProjection::VarsInfo const & varsInfo) {
     auto id = Idx(logic.getPterm(fla).getId());
     if (id >= processed.size()) {
         throw std::logic_error("Should not happen!");
@@ -327,17 +328,24 @@ void collectImplicant(Logic & logic, PTRef fla, Model & model, std::vector<char>
         for (int i = 0; i < size; ++i) {
             PTRef child = logic.getPterm(fla)[i];
             assert(model.evaluate(child) == trueTerm);
-            collectImplicant(logic, child, model, processed, literals);
+            collectImplicant(logic, child, model, processed, literals, varsInfo);
         }
         return;
     }
     if (logic.isOr(fla)) {
+        bool hasInterestingVars = false;
+        if (varsInfo.peek(fla, hasInterestingVars)) {
+            if (not hasInterestingVars) {
+                literals.push_back(PtAsgn(fla, l_True));
+                return;
+            }
+        }
         // at least one child must be satisfied
         auto size = logic.getPterm(fla).size();
         for (int i = 0; i < size; ++i) {
             PTRef child = logic.getPterm(fla)[i];
             if (model.evaluate(child) == trueTerm) {
-                collectImplicant(logic, child, model, processed, literals);
+                collectImplicant(logic, child, model, processed, literals, varsInfo);
                 return;
             }
         }
@@ -355,14 +363,54 @@ void collectImplicant(Logic & logic, PTRef fla, Model & model, std::vector<char>
     }
     throw std::logic_error("Unexpected connective in formula in collectImplicant");
 }
+
+ModelBasedProjection::VarsInfo computeVarsInfo(PTRef fla, Logic & logic, PTRef const * const beg, PTRef const * const end) {
+    Map<PTRef, bool, PTRefHash> res;
+    vec<PTRef> queue;
+    queue.push(fla);
+    while (queue.size() != 0) {
+        PTRef tr = queue.last();
+        if (res.has(tr)) {
+            queue.pop();
+            continue;
+        }
+        bool unprocessed_children = false;
+        for (int i = 0; i < logic.getPterm(tr).size(); i++) {
+            PTRef c = logic.getPterm(tr)[i];
+            if (res.has(c)) continue;
+            else {
+                queue.push(c);
+                unprocessed_children = true;
+            }
+        }
+        if (unprocessed_children == true) continue;
+        queue.pop();
+        if (logic.isVar(tr)) {
+            bool ofInterest = std::find(beg, end, tr) != end;
+            res.insert(tr, ofInterest);
+        } else if (logic.isConstant(tr)) {
+            res.insert(tr, false);
+        } else {
+            bool anyChildOfInterest = false;
+            for (int i = 0; i < logic.getPterm(tr).size() and not anyChildOfInterest; i++) {
+                PTRef c = logic.getPterm(tr)[i];
+                assert(res.has(c));
+                anyChildOfInterest = res[c];
+            }
+            res.insert(tr, anyChildOfInterest);
+        }
+    }
+    return res;
 }
 
-ModelBasedProjection::implicant_t ModelBasedProjection::getImplicant(PTRef fla, Model & model) {
+}
+
+ModelBasedProjection::implicant_t ModelBasedProjection::getImplicant(PTRef fla, Model & model, VarsInfo const & varsInfo) {
     assert(model.evaluate(fla) == logic.getTerm_true());
     std::vector<PtAsgn> literals;
     std::vector<char> processed;
     processed.resize(Idx(logic.getPterm(fla).getId()) + 1, 0);
-    collectImplicant(logic, fla, model, processed, literals);
+    collectImplicant(logic, fla, model, processed, literals, varsInfo);
     return literals;
 }
 
@@ -394,7 +442,24 @@ PTRef ModelBasedProjection::project(PTRef fla, const vec<PTRef> & varsToEliminat
     }
 
     PTRef nnf = TermUtils(logic).toNNF(fla);
-    auto implicant = getImplicant(nnf, model);
+
+    // compute map to know if given term contains any variable to eliminate
+    auto varsInfo = computeVarsInfo(nnf, logic, boolEndIt, tmp.end());
+
+//    auto implicant = getImplicant(nnf, model);
+    auto implicant = getImplicant(nnf, model, varsInfo);
+
+    // separate terms that do not contain variables of interest
+    auto separator = std::stable_partition(implicant.begin(), implicant.end(), [&varsInfo](PtAsgn lit) {
+       bool hasVar = true;
+       if (varsInfo.peek(lit.tr, hasVar)) {
+           return hasVar;
+       }
+       return true; // if we don't know, we pessimistically assume we need to process it
+    });
+    implicant_t withoutVarsToEliminate(separator, implicant.end());
+    implicant.erase(separator, implicant.end());
+
 //    dumpImplicant(std::cout, implicant);
     checkImplicant(implicant);
     if (dynamic_cast<LIALogic*>(&logic)) {
@@ -409,6 +474,9 @@ PTRef ModelBasedProjection::project(PTRef fla, const vec<PTRef> & varsToEliminat
     }
     tmp.clear();
     for (PtAsgn literal : implicant) {
+        tmp.push(literal.sgn == l_True ? literal.tr : logic.mkNot(literal.tr));
+    }
+    for (PtAsgn literal : withoutVarsToEliminate) {
         tmp.push(literal.sgn == l_True ? literal.tr : logic.mkNot(literal.tr));
     }
     return logic.mkAnd(tmp);

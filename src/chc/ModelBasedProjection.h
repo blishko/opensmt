@@ -20,6 +20,8 @@ private:
     Logic & logic;
 
 public:
+    using VarsInfo = Map<PTRef, bool, PTRefHash>;
+
     explicit ModelBasedProjection(Logic & logic) : logic(logic) {}
 
     PTRef project(PTRef fla, vec<PTRef> const& varsToEliminate, Model& model);
@@ -29,7 +31,7 @@ private:
 
     implicant_t projectSingleVar(PTRef var, implicant_t implicant, Model & model);
 
-    implicant_t getImplicant(PTRef var, Model & model);
+    implicant_t getImplicant(PTRef var, Model & model, VarsInfo const&);
 
     void dumpImplicant(ostream& out, implicant_t const & implicant);
 
