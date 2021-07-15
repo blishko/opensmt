@@ -460,8 +460,8 @@ std::unique_ptr<Theory> MainSolver::createTheory(Logic & logic, SMTConfig & conf
         }
         case Logic_t::QF_UFLRA:
         {
-            LRALogic & lraLogic = dynamic_cast<LRALogic &>(logic);
-            theory = new UFLRATheory(config, lraLogic);
+            UFLRALogic & uflraLogic = dynamic_cast<UFLRALogic &>(logic);
+            theory = new UFLRATheory(config, uflraLogic);
             break;
         }
         case Logic_t::UNDEF:

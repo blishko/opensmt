@@ -7,6 +7,7 @@
 #include "LRALogic.h"
 #include "LIALogic.h"
 #include "BVLogic.h"
+#include "UFLRALogic.h"
 #include "OsmtApiException.h"
 
 #include <array>
@@ -34,9 +35,13 @@ std::string opensmt::getStringFromLogic(const opensmt::Logic_t logic) {
 Logic * opensmt::LogicFactory::getInstance(Logic_t logicType) {
     Logic * l = nullptr;
     switch (logicType) {
+        case Logic_t::QF_UFLRA:
+        {
+            l = new UFLRALogic();
+            break;
+        }
         case Logic_t::QF_RDL:
         case Logic_t::QF_LRA:
-        case Logic_t::QF_UFLRA:
         case Logic_t::QF_UFRDL:
         {
             l = new LRALogic();

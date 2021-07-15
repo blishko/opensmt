@@ -3,8 +3,9 @@
 #include "TreeOps.h"
 //#include "InterpolatingEgraph.h"
 #include "Egraph.h"
+#include "UFLRALogic.h"
 
-UFLRATHandler::UFLRATHandler(SMTConfig & c, LRALogic & l)
+UFLRATHandler::UFLRATHandler(SMTConfig & c, UFLRALogic & l)
         : LRATHandler(c, l)
         , logic(l)
 {

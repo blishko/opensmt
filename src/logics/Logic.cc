@@ -917,7 +917,7 @@ void Logic::markConstant(SymId id) {
 
 PTRef Logic::mkUninterpFun(SymRef f, const vec<PTRef> & args) {
     PTRef tr = mkFun(f, args);
-    assert(isUFTerm(tr) || isUP(tr));
+//    assert(isUFTerm(tr) || isUP(tr));
     return tr;
 }
 
