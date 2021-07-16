@@ -279,6 +279,9 @@ VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
     if (isReachable(res)) {
         return VerificationResult::UNSAFE;
     } else if (isUnreachable(res)) {
+        if (verbose() > 0) {
+            std::cout << "System is safe up to <2^" << power - 1 << " steps" << std::endl;
+        }
         // Check if we have not reached fixed point.
         if (power >= 3) {
             auto fixedPointReached = checkLessThanFixedPoint(power);
@@ -297,6 +300,9 @@ VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
     if (isReachable(res)) {
         return VerificationResult::UNSAFE;
     } else if (isUnreachable(res)) {
+        if (verbose() > 0) {
+            std::cout << "System is safe up to 2^" << power - 1 << " steps" << std::endl;
+        }
         return VerificationResult::UNKNOWN;
     } else {
         assert(false);
@@ -786,16 +792,20 @@ bool AcceleratedBmc::checkLessThanFixedPoint(unsigned short power) {
             MainSolver solver(logic, config, "Fixed-point checker");
             solver.insertFormula(logic.mkAnd({currentLevelTransition, getNextVersion(transition), logic.mkNot(shiftOnlyNextVars(currentLevelTransition))}));
             auto satres = solver.check();
+            bool restrictedInvariant = false;
             if (satres != s_False) {
                 solver.push();
                 solver.insertFormula(init);
                 satres = solver.check();
                 if (satres == s_False) {
-//                    std::cout << "Invariant found using restricted check with Init" << std::endl;
+                    restrictedInvariant = true;
                 }
             }
             if (satres == s_False) {
-//                 std::cout << "Fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
+                if (verbose() > 0) {
+                    std::cout << "Right fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
+                    std::cout << "Fixed point detected for " << (not restrictedInvariant ? "whole transition relation" : "transition relation restricted to init") << std::endl;
+                }
                 if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
 //                     std::cout << "Computing inductive invariant" << std::endl;
                     inductiveInvariant = getNextVersion(QuantifierElimination(logic).keepOnly(logic.mkAnd(init, currentLevelTransition), getStateVars(1)), -1);
@@ -808,16 +818,20 @@ bool AcceleratedBmc::checkLessThanFixedPoint(unsigned short power) {
             MainSolver solver(logic, config, "Fixed-point checker");
             solver.insertFormula(logic.mkAnd({transition, getNextVersion(currentLevelTransition), logic.mkNot(shiftOnlyNextVars(currentLevelTransition))}));
             auto satres = solver.check();
+            bool restrictedInvariant = false;
             if (satres != s_False) {
                 solver.push();
                 solver.insertFormula(getNextVersion(query, 2));
                 satres = solver.check();
                 if (satres == s_False) {
-//                    std::cout << "Invariant found using restricted check with Bad" << std::endl;
+                    restrictedInvariant = true;
                 }
             }
             if (satres == s_False) {
-//                 std::cout << "Fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
+                if (verbose() > 0) {
+                    std::cout << "Left fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
+                    std::cout << "Fixed point detected for " << (not restrictedInvariant ? "whole transition relation" : "transition relation restricted to bad") << std::endl;
+                }
                 if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
                     // std::cout << "Computing inductive invariant" << std::endl;
                     inductiveInvariant = logic.mkNot(QuantifierElimination(logic).keepOnly(logic.mkAnd(currentLevelTransition,
@@ -840,16 +854,20 @@ bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
         MainSolver solver(logic, config, "Fixed-point checker");
         solver.insertFormula(logic.mkAnd({currentTwoStep, logic.mkNot(shifted)}));
         sstat satres = solver.check();
+        bool restrictedInvariant = false;
         if (satres != s_False) {
             solver.push();
             solver.insertFormula(getNextVersion(logic.mkAnd(init, getLessThanPower(i)), -1));
             satres = solver.check();
             if (satres == s_False) {
-                std::cout << "Safety proved with the restricted check!" << std::endl;
+                restrictedInvariant = true;
             }
         }
         if (satres == s_False) {
-//            std::cout << "Fixed point detected in exact relation on level " << i << " from " << power << std::endl;
+            if (verbose() > 0) {
+                std::cout << "Fixed point detected in equals relation on level " << i << " from " << power << std::endl;
+                std::cout << "Fixed point detected for " << (not restrictedInvariant ? "whole transition relation" : "transition relation restricted to init") << std::endl;
+            }
             if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
                 if (i <= 10) {
 //                    std::cout << "Computing inductive invariant" << std::endl;

@@ -43,8 +43,14 @@ class AcceleratedBmc : public Engine {
     vec<PTRef> auxiliaryVariables;
     PTRef inductiveInvariant = PTRef_Undef;
 
+    int verbosity = 0;
+
 public:
-    AcceleratedBmc(Logic& logic, Options const & options) : logic(logic), options(options) {}
+    AcceleratedBmc(Logic& logic, Options const & options) : logic(logic), options(options) {
+        if (options.hasOption(Options::VERBOSE)) {
+            verbosity = std::stoi(options.getOption(Options::VERBOSE));
+        }
+    }
 
     GraphVerificationResult solve(ChcDirectedHyperGraph & system) override;
 
@@ -115,6 +121,10 @@ private:
 
     bool verifyKinductiveInvariant(PTRef invariant, unsigned long k);
     PTRef kinductiveToInductive(PTRef invariant, unsigned long k);
+
+    int verbose() const {
+        return verbosity;
+    }
 };
 
 
