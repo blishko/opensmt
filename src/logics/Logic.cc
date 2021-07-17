@@ -839,9 +839,16 @@ PTRef Logic::mkNot(PTRef arg) {
     else if (isTrue(arg)) return getTerm_false();
     else if (isFalse(arg)) return getTerm_true();
     else {
-        vec<PTRef> tmp;
-        tmp.push(arg);
-        tr = mkFun(getSym_not(), tmp);
+        term_key.sym = getSym_not();
+        term_key.args.clear();
+        term_key.args.push(arg);
+        if (term_store.hasBoolKey(term_key)) {
+            tr = term_store.getFromBoolMap(term_key);
+        }
+        else {
+            tr = term_store.newTerm(term_key.sym, term_key.args);
+            term_store.addToBoolMap(std::move(term_key), tr);
+        }
     }
 
     if(tr == PTRef_Undef) {
