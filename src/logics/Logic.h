@@ -119,6 +119,8 @@ class Logic {
     vec<UFAppearanceStatus> appears_in_uf;
     void unsetAppearsInUF(PTRef tr);
 
+    PTLKey term_key;
+
   public:
     vec<PTRef> propFormulasAppearingInUF;
     std::size_t getNumberOfTerms() const { return term_store.getNumberOfTerms(); }

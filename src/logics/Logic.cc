@@ -1041,26 +1041,24 @@ Logic::insertTermHash(SymRef sym, const vec<PTRef>& terms)
             strcpy(msg, e_argnum_mismatch);
             return PTRef_Undef;
         }
-        PTLKey k;
-        k.sym = sym;
-        terms.copyTo(k.args);
+        term_key.sym = sym;
+        terms.copyTo(term_key.args);
         if (sym_store[sym].commutes()) {
-            termSort(k.args);
+            termSort(term_key.args);
         }
-        if (term_store.hasCplxKey(k))
-            res = term_store.getFromCplxMap(k);
+        if (term_store.hasCplxKey(term_key))
+            res = term_store.getFromCplxMap(term_key);
         else {
-            res = term_store.newTerm(sym, k.args);
-            term_store.addToCplxMap(std::move(k), res);
+            res = term_store.newTerm(sym, term_key.args);
+            term_store.addToCplxMap(std::move(term_key), res);
         }
     }
     else {
         // Boolean operator
-        PTLKey k;
-        k.sym = sym;
-        terms.copyTo(k.args);
-        if (term_store.hasBoolKey(k)) {//bool_map.contains(k)) {
-            res = term_store.getFromBoolMap(k); //bool_map[k];
+        term_key.sym = sym;
+        terms.copyTo(term_key.args);
+        if (term_store.hasBoolKey(term_key)) {
+            res = term_store.getFromBoolMap(term_key);
 #ifdef SIMPLIFY_DEBUG
             char* ts = printTerm(res);
             cerr << "duplicate: " << ts << endl;
@@ -1069,7 +1067,7 @@ Logic::insertTermHash(SymRef sym, const vec<PTRef>& terms)
         }
         else {
             res = term_store.newTerm(sym, terms);
-            term_store.addToBoolMap(std::move(k), res);
+            term_store.addToBoolMap(std::move(term_key), res);
 #ifdef SIMPLIFY_DEBUG
             char* ts = printTerm(res);
             cerr << "new: " << ts << endl;
