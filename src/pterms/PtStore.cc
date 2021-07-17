@@ -26,10 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "PtStore.h"
 
-#include <sstream>
-
-const int PtStore::ptstore_vec_idx = 1;
-const int PtStore::ptstore_buf_idx = 2;
+#include <algorithm>
 
 //
 // Resolves the SymRef for name s taking into account polymorphism
@@ -127,6 +124,7 @@ const PtermIter& PtermIter::operator++ () { i++; return *this; }
 PTRef PtStore::newTerm(const SymRef sym, const vec<PTRef>& ps) {
     PTRef tr = pta.alloc(sym, ps); idToPTRef.push(tr);
     assert(idToPTRef.size_() == pta.getNumTerms());
+    assert(pta[tr].getId().x == pta.getNumTerms() - 1);
     return tr;
 }
 
@@ -141,13 +139,29 @@ bool  PtStore::hasCtermKey    (SymRef& k)             { return cterm_map.has(k);
 void  PtStore::addToCtermMap  (SymRef& k, PTRef tr)   { cterm_map.insert(k, tr); }
 PTRef PtStore::getFromCtermMap(SymRef& k)             { return cterm_map[k]; }
 
-bool  PtStore::hasBoolKey     (const PTLKey& k)       { return bool_map.find(k) != bool_map.end(); }
-void  PtStore::addToBoolMap   (PTLKey &&k, PTRef tr)  { bool_map[std::move(k)] = tr; }
-PTRef PtStore::getFromBoolMap (const PTLKey& k)       { return bool_map.at(k); }
 
-bool  PtStore::hasCplxKey     (const PTLKey& k)       { return cplx_map.find(k) != cplx_map.end(); }
-void  PtStore::addToCplxMap   (PTLKey && k, PTRef tr) { cplx_map[std::move(k)] = tr; }
-PTRef PtStore::getFromCplxMap (const PTLKey& k)       { return cplx_map.at(k); }
+PTRef PtStore::getOrCreate(const PTLKey& k, TermTable & table) {
+    std::size_t hash = PTLHash{}(k);
+    auto & candidates = table[hash];
+    for (PTRef candidate : candidates) {
+        if (equals(k, candidate)) {
+            return candidate;
+        }
+    }
+    PTRef res = newTerm(k.sym, k.args);
+    candidates.push(res);
+    return res;
+}
 
 PtermIter PtStore::getPtermIter() { return PtermIter(idToPTRef); }
+
+bool PtStore::equals(const PTLKey & key, PTRef ref) {
+    Pterm const& term = this->operator[](ref);
+    if (key.sym != term.symb()) return false;
+    if (key.args.size() != term.nargs()) return false;
+    int i;
+    for (i = 0; i < key.args.size(); ++i)
+        if (key.args[i] != term[i]) { return false; }
+    return true;
+}
 

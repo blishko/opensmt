@@ -342,9 +342,6 @@ class Logic {
     // PTRef_Undef otherwise.
     PTRef       lookupUPEq         (PTRef tr);
 
-    // Returns an equality over args if term store contains one, otherwise returns PTRef_Undef.
-    // args is sorted before lookup, but not simplified otherwise
-    PTRef       hasEquality        (vec<PTRef>& args);
     // Override for different logics...
     virtual bool declare_sort_hook  (SRef sr);
     inline bool isPredef           (string&)        const ;//{ return false; };

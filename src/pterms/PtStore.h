@@ -54,16 +54,13 @@ class PtStore {
     vec<PTRef>     idToPTRef;
 
     Map<SymRef,PTRef,SymRefHash,Equal<SymRef> > cterm_map; // Mapping constant symbols to terms
-//    vec<SymRef> cterm_keys;
 
-    std::unordered_map<PTLKey,PTRef,PTLHash,Equal<PTLKey> >    cplx_map;  // Mapping complex terms to canonical terms
-//    vec<PTLKey> cplx_keys;
+    using TermTable = std::unordered_map<std::size_t, vec<PTRef>>;
+    TermTable cplx_map; // Mapping complex terms to canonical terms
+    TermTable bool_map; // Mapping boolean terms to canonical terms
 
-    std::unordered_map<PTLKey,PTRef,PTLHash,Equal<PTLKey> >    bool_map;  // Mapping boolean terms to canonical terms
-//    vec<PTLKey> bool_keys;
-//    friend class Logic;
-    static const int ptstore_buf_idx;
-    static const int ptstore_vec_idx;
+    bool equals(PTLKey const&, PTRef);
+    PTRef getOrCreate(PTLKey const&, TermTable &);
   public:
     PtStore(SymStore& symstore) : symstore(symstore) {}
 
@@ -87,13 +84,8 @@ class PtStore {
     }*/
     PTRef getFromCtermMap(SymRef& k);// { return cterm_map[k]; }
 
-    bool hasBoolKey(const PTLKey& k);
-    void addToBoolMap(PTLKey && k, PTRef tr);
-    PTRef getFromBoolMap(const PTLKey& k);
-
-    bool hasCplxKey(const PTLKey& k);
-    void addToCplxMap(PTLKey && k, PTRef tr);
-    PTRef getFromCplxMap(const PTLKey& k);
+    PTRef getOrCreateBool(const PTLKey& k) { return getOrCreate(k, bool_map); }
+    PTRef getOrCreateCplx(const PTLKey& k) { return getOrCreate(k, cplx_map); }
 
     PtermIter getPtermIter();// { return PtermIter(idToPTRef); }
 

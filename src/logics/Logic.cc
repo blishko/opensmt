@@ -798,32 +798,7 @@ PTRef Logic::mkDistinct(vec<PTRef>& args) {
         }
     }
 
-    SymRef diseq_sym = term_store.lookupSymbol(tk_distinct, args);
-    assert(!isBooleanOperator(diseq_sym));
-    PTLKey key;
-    key.sym = diseq_sym;
-    args.copyTo(key.args);
-    if (term_store.hasCplxKey(key)) {
-        return term_store.getFromCplxMap(key);
-    }
-    else {
-        if (distinctClassCount < maxDistinctClasses) {
-            PTRef res = term_store.newTerm(diseq_sym, args);
-            term_store.addToCplxMap(std::move(key), res);
-            distinctClassCount++;
-            return res;
-        }
-        else {
-            vec<PTRef> distinct_terms;
-            for (int i = 0; i < args.size(); i++) {
-                for (int j = i + 1; j < args.size(); j++) {
-                    vec<PTRef> small_distinct{args[i], args[j]};
-                    distinct_terms.push(mkDistinct(small_distinct));
-                }
-            }
-            return mkAnd(distinct_terms);
-        }
-    }
+    throw std::logic_error("TODO");
 }
 
 PTRef Logic::mkNot(vec<PTRef>& args) {
@@ -842,13 +817,7 @@ PTRef Logic::mkNot(PTRef arg) {
         term_key.sym = getSym_not();
         term_key.args.clear();
         term_key.args.push(arg);
-        if (term_store.hasBoolKey(term_key)) {
-            tr = term_store.getFromBoolMap(term_key);
-        }
-        else {
-            tr = term_store.newTerm(term_key.sym, term_key.args);
-            term_store.addToBoolMap(std::move(term_key), tr);
-        }
+        tr = term_store.getOrCreateBool(term_key);
     }
 
     if(tr == PTRef_Undef) {
@@ -1053,34 +1022,13 @@ Logic::insertTermHash(SymRef sym, const vec<PTRef>& terms)
         if (sym_store[sym].commutes()) {
             termSort(term_key.args);
         }
-        if (term_store.hasCplxKey(term_key))
-            res = term_store.getFromCplxMap(term_key);
-        else {
-            res = term_store.newTerm(sym, term_key.args);
-            term_store.addToCplxMap(std::move(term_key), res);
-        }
+        res = term_store.getOrCreateCplx(term_key);
     }
     else {
         // Boolean operator
         term_key.sym = sym;
         terms.copyTo(term_key.args);
-        if (term_store.hasBoolKey(term_key)) {
-            res = term_store.getFromBoolMap(term_key);
-#ifdef SIMPLIFY_DEBUG
-            char* ts = printTerm(res);
-            cerr << "duplicate: " << ts << endl;
-            ::free(ts);
-#endif
-        }
-        else {
-            res = term_store.newTerm(sym, terms);
-            term_store.addToBoolMap(std::move(term_key), res);
-#ifdef SIMPLIFY_DEBUG
-            char* ts = printTerm(res);
-            cerr << "new: " << ts << endl;
-            ::free(ts);
-#endif
-        }
+        res = term_store.getOrCreateBool(term_key);
     }
     return res;
 }
@@ -1146,23 +1094,6 @@ PTRef Logic::lookupUPEq(PTRef ptr) {
     args.push(getTerm_true());
     return mkEq(args);
 //    return resolveTerm(tk_equals, args);
-}
-
-// Check if the term store contains an equality over the given arguments
-// Return the reference if yes, return PTRef_Undef if no
-// Changes the argument!
-PTRef Logic::hasEquality(vec<PTRef>& args)
-{
-    SymRef sref = term_store.lookupSymbol(tk_equals, args);
-    assert(sref != SymRef_Undef);
-    termSort(args);
-    PTLKey k;
-    k.sym = sref;
-    args.copyTo(k.args);
-    if (term_store.hasCplxKey(k))
-        return term_store.getFromCplxMap(k);
-    else
-        return PTRef_Undef;
 }
 
 bool Logic::isBooleanOperator(SymRef tr) const {
