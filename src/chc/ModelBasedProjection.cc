@@ -22,24 +22,40 @@ namespace{
     };
 
     PTRef substituteBound(Bound const& what, Bound const& where, LALogic & logic) {
-        assert(what.type == BoundType::LOWER);
-        if (what.type != BoundType::LOWER) {
-            throw std::invalid_argument("Bound substitution can use only lower bounds");
+        if (what.type == BoundType::UPPER and where.type == BoundType::UPPER) {
+            throw std::invalid_argument("Not implemented yet for two upper bounds");
         }
-        if (where.type == BoundType::LOWER) {
+        if (where.type == BoundType::LOWER and what.type == BoundType::LOWER) {
             if (where.strict and not what.strict) {
                 return logic.mkNumLt(where.val, what.val);
             } else {
                 return logic.mkNumLeq(where.val, what.val);
             }
         } else {
-            assert(where.type == BoundType::UPPER);
-            if (what.strict or where.strict) {
-                return logic.mkNumLt(what.val, where.val);
+            assert(where.type == BoundType::UPPER or what.type == BoundType::UPPER);
+            assert(where.type == BoundType::LOWER or what.type == BoundType::LOWER);
+            auto const & upper = where.type == BoundType::UPPER ? where : what;
+            auto const & lower = where.type == BoundType::UPPER ? what : where;
+            if (upper.strict or lower.strict) {
+                return logic.mkNumLt(lower.val, upper.val);
             } else {
-                return logic.mkNumLeq(what.val, where.val);
+                return logic.mkNumLeq(lower.val, upper.val);
             }
         }
+    }
+
+    vec<PTRef> substituteBound(Bound const& what, std::vector<Bound> const& where, LALogic & logic) {
+        vec<PTRef> res;
+        for (Bound const & bound : where) {
+            PTRef subResult = substituteBound(what, bound, logic);
+            if (logic.isNumEq(subResult)) {
+                throw std::logic_error("This should not happen anymore");
+            }
+            else if (subResult != logic.getTerm_true()) {
+                res.push(subResult);
+            }
+        }
+        return res;
     }
 
     struct LinearFactor {
@@ -216,9 +232,10 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
     // "interestingEnd" points to the first literal that does not contain the var anymore
 
     // collect the lower and upper bounds, remember if they are strict or non-strict
+//    std::vector<Bound> bounds;
+    std::vector<Bound> lBounds;
+    std::vector<Bound> uBounds;
     std::vector<Bound> bounds;
-    std::vector<PTRef> lBounds;
-    std::vector<PTRef> uBounds;
     for (auto it = implicant.begin(); it != interestingEnd; ++it) {
         PTRef ineq = it->tr;
         lbool sign = it->sgn;
@@ -259,48 +276,58 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
         auto boundType = isLower ? BoundType::LOWER : BoundType::UPPER;
         bounds.push_back(Bound{.type = boundType, .val = bound, .strict = isStrict});
         auto & whereToPush = isLower ? lBounds : uBounds;
-        whereToPush.push_back(bound);
+        whereToPush.push_back(bounds.back());
     }
 
-    // pick the correct literal based on the model
-    PTRef varVal = model.evaluate(var);
-    assert(lalogic->isConstant(varVal));
     if (lBounds.empty() or uBounds.empty()) {
         // if we are missing either upper or lower bounds altogether, no new literals are produced and we can just return those not containing this variable
         return implicant_t(interestingEnd, implicant.end());
     }
-    // pick substitution from lower bounds
-    // pick highest lower bound according to the model
-    Bound const * highestLowerBound = nullptr;
-    for (auto const& bound : bounds) {
-        if (bound.type == BoundType::UPPER) { continue; }
-        if (highestLowerBound == nullptr) {
-            highestLowerBound = &bound;
-            continue;
-        }
-        PTRef currentValRef = model.evaluate(highestLowerBound->val);
-        PTRef otherValRef = model.evaluate(bound.val);
-        assert(lalogic->isConstant(currentValRef) && lalogic->isConstant(otherValRef));
-        auto const & currentVal = lalogic->getNumConst(currentValRef);
-        auto const & otherVal = lalogic->getNumConst(otherValRef);
-        if (otherVal > currentVal or (otherVal == currentVal and bound.strict)) {
-            highestLowerBound = &bound;
-        }
-    }
-    // perform substitution
+
     implicant_t newLiterals;
-    for (Bound const & bound : bounds) {
-        PTRef subResult = substituteBound(*highestLowerBound, bound, *lalogic);
-        assert(model.evaluate(subResult) == logic.getTerm_true());
-        if (lalogic->isNumEq(subResult)) {
-            throw std::logic_error("This should not happen anymore");
+    if (uBounds.size() == 1) {
+        // Do full elimination with single bound; This yields more general result
+        auto subRes = substituteBound(uBounds[0], lBounds, *lalogic);
+        assert(std::all_of(subRes.begin(), subRes.end(), [&](PTRef lit) { return model.evaluate(lit) == logic.getTerm_true(); }));
+        newLiterals.resize(subRes.size());
+        std::transform(subRes.begin(), subRes.end(), newLiterals.begin(),
+            [&](PTRef lit) { return lalogic->isNot(lit) ? PtAsgn(lalogic->getPterm(lit)[0], l_False) : PtAsgn(lit, l_True);});
+    } else {
+        // pick the correct literal based on the model
+        PTRef varVal = model.evaluate(var);
+        assert(lalogic->isConstant(varVal));
+        // pick substitution from lower bounds
+        // pick highest lower bound according to the model
+        Bound const * highestLowerBound = nullptr;
+        for (auto const & bound : lBounds) {
+            assert(bound.type == BoundType::LOWER);
+            if (highestLowerBound == nullptr) {
+                highestLowerBound = &bound;
+                continue;
+            }
+            PTRef currentValRef = model.evaluate(highestLowerBound->val);
+            PTRef otherValRef = model.evaluate(bound.val);
+            assert(lalogic->isConstant(currentValRef) && lalogic->isConstant(otherValRef));
+            auto const & currentVal = lalogic->getNumConst(currentValRef);
+            auto const & otherVal = lalogic->getNumConst(otherValRef);
+            if (otherVal > currentVal or (otherVal == currentVal and bound.strict)) {
+                highestLowerBound = &bound;
+            }
         }
-        else if (subResult != logic.getTerm_true()) {
-            PtAsgn newLiteral = lalogic->isNot(subResult) ? PtAsgn(lalogic->getPterm(subResult)[0], l_False)
-                                                       : PtAsgn(subResult, l_True);
-            newLiterals.push_back(newLiteral);
+        // perform substitution
+        for (Bound const & bound : bounds) {
+            PTRef subResult = substituteBound(*highestLowerBound, bound, *lalogic);
+            assert(model.evaluate(subResult) == logic.getTerm_true());
+            if (lalogic->isNumEq(subResult)) {
+                throw std::logic_error("This should not happen anymore");
+            } else if (subResult != logic.getTerm_true()) {
+                PtAsgn newLiteral = lalogic->isNot(subResult) ? PtAsgn(lalogic->getPterm(subResult)[0], l_False)
+                                                              : PtAsgn(subResult, l_True);
+                newLiterals.push_back(newLiteral);
+            }
         }
     }
+    // TODO: should we postprocess AFTER adding the literals not containing the var to eliminate?
     postprocess(newLiterals, *lalogic);
     // don't forget the literals not containing the var to eliminate
     newLiterals.insert(newLiterals.end(), interestingEnd, implicant.end());
