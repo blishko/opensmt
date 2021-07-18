@@ -101,15 +101,19 @@ namespace{
 }
 
 void ModelBasedProjection::postprocess(implicant_t & literals, LALogic & lalogic) {
+    implicant_t tmp;
+    tmp.reserve(literals.size());
     MapWithKeys<PtAsgn, PTRef, PtAsgnHash> bounds;
     for (PtAsgn literal : literals) {
         auto sign = literal.sgn;
         PTRef ineq = literal.tr;
         if (not lalogic.isNumLeq(ineq)) {
-            throw std::logic_error("Only inequalities should be present in collect literals in MBP");
+            tmp.push_back(literal);
+            continue;
         }
-        PTRef constant = lalogic.getPterm(ineq)[0];
-        PTRef term = lalogic.getPterm(ineq)[1];
+        auto pair = lalogic.leqToConstantAndTerm(ineq);
+        PTRef constant = pair.first;
+        PTRef term = pair.second;
         assert(lalogic.isConstant(constant) and lalogic.isLinearTerm(term));
         PtAsgn key(term, sign);
         PTRef currentValue;
@@ -131,11 +135,11 @@ void ModelBasedProjection::postprocess(implicant_t & literals, LALogic & lalogic
         }
     }
     auto const & keys = bounds.getKeys();
-    if (keys.size() < literals.size()) { // something actually changed
-        literals.clear();
+    if (keys.size() + tmp.size() < literals.size()) { // something actually changed
         for (PtAsgn key : keys) {
-            literals.push_back(PtAsgn(lalogic.mkNumLeq(bounds[key], key.tr), key.sgn));
+            tmp.push_back(PtAsgn(lalogic.mkNumLeq(bounds[key], key.tr), key.sgn));
         }
+        literals = std::move(tmp);
     }
 }
 
@@ -315,22 +319,15 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
             }
         }
         // perform substitution
-        for (Bound const & bound : bounds) {
-            PTRef subResult = substituteBound(*highestLowerBound, bound, *lalogic);
-            assert(model.evaluate(subResult) == logic.getTerm_true());
-            if (lalogic->isNumEq(subResult)) {
-                throw std::logic_error("This should not happen anymore");
-            } else if (subResult != logic.getTerm_true()) {
-                PtAsgn newLiteral = lalogic->isNot(subResult) ? PtAsgn(lalogic->getPterm(subResult)[0], l_False)
-                                                              : PtAsgn(subResult, l_True);
-                newLiterals.push_back(newLiteral);
-            }
-        }
+        auto subRes = substituteBound(*highestLowerBound, bounds, *lalogic);
+        assert(std::all_of(subRes.begin(), subRes.end(), [&](PTRef lit) { return model.evaluate(lit) == logic.getTerm_true(); }));
+        newLiterals.resize(subRes.size());
+        std::transform(subRes.begin(), subRes.end(), newLiterals.begin(),
+            [&](PTRef lit) { return lalogic->isNot(lit) ? PtAsgn(lalogic->getPterm(lit)[0], l_False) : PtAsgn(lit, l_True);});
     }
-    // TODO: should we postprocess AFTER adding the literals not containing the var to eliminate?
-    postprocess(newLiterals, *lalogic);
     // don't forget the literals not containing the var to eliminate
     newLiterals.insert(newLiterals.end(), interestingEnd, implicant.end());
+    postprocess(newLiterals, *lalogic);
     return std::move(newLiterals);
 }
 
@@ -499,11 +496,10 @@ PTRef ModelBasedProjection::project(PTRef fla, const vec<PTRef> & varsToEliminat
 //        dumpImplicant(std::cout, implicant);
         checkImplicant(implicant);
     }
+    implicant.insert(implicant.end(), withoutVarsToEliminate.begin(), withoutVarsToEliminate.end());
+    postprocess(implicant, dynamic_cast<LALogic&>(logic));
     tmp.clear();
     for (PtAsgn literal : implicant) {
-        tmp.push(literal.sgn == l_True ? literal.tr : logic.mkNot(literal.tr));
-    }
-    for (PtAsgn literal : withoutVarsToEliminate) {
         tmp.push(literal.sgn == l_True ? literal.tr : logic.mkNot(literal.tr));
     }
     return logic.mkAnd(tmp);

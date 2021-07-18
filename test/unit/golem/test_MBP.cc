@@ -374,6 +374,39 @@ TEST_F(MBP_RealTest, test_singleUpperBound) {
     EXPECT_EQ(res, logic.mkAnd(logic.mkNumLeq(y, one), logic.mkNumLeq(z, one)));
 }
 
+TEST_F(MBP_RealTest, test_avoidRedundantBounds_2) {
+    // y + z <= x and x <= 0 and y + z <= 1 and z = 0
+    PTRef yz = logic.mkNumPlus(y,z);
+    PTRef lit1 = logic.mkNumLeq(yz,x);
+    PTRef lit2 = logic.mkNumLeq(x, zero);
+    PTRef lit3 = logic.mkNumLeq(yz, one);
+    PTRef lit4 = logic.mkEq(z, zero);
+    PTRef fla = logic.mkAnd({lit1, lit2, lit3, lit4});
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, zero);
+    builder.addVarValue(y, zero);
+    builder.addVarValue(z, zero);
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {x,z}, *model);
+    std::cout << logic.printTerm(res) << std::endl;
+    EXPECT_EQ(res, logic.mkAnd({logic.mkNumLeq(y, zero)}));
+}
+
+TEST_F(MBP_RealTest, test_avoidRedundantBounds_3) {
+    // y  <= x and x <= 0 and y <= 1
+    PTRef lit1 = logic.mkNumLeq(y,x);
+    PTRef lit2 = logic.mkNumLeq(x, zero);
+    PTRef lit3 = logic.mkNumLeq(y, one);
+    PTRef fla = logic.mkAnd({lit1, lit2, lit3});
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, zero);
+    builder.addVarValue(y, zero);
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {x}, *model);
+    std::cout << logic.printTerm(res) << std::endl;
+    EXPECT_EQ(res, logic.mkAnd({logic.mkNumLeq(y, zero)}));
+}
+
 
 class MBP_IntTest : public ::testing::Test {
 protected:
