@@ -407,6 +407,23 @@ TEST_F(MBP_RealTest, test_avoidRedundantBounds_3) {
     EXPECT_EQ(res, logic.mkAnd({logic.mkNumLeq(y, zero)}));
 }
 
+TEST_F(MBP_RealTest, test_hiddenEquality) {
+    // z <= x and y  <= x and x <= y and  x <= 1
+    PTRef lit3 = logic.mkNumLeq(z, x);
+    PTRef lit1 = logic.mkNumLeq(y, x);
+    PTRef lit2 = logic.mkNumLeq(x, y);
+    PTRef lit4 = logic.mkNumLeq(x, one);
+    PTRef fla = logic.mkAnd({lit1, lit2, lit3, lit4});
+    ModelBuilder builder(logic);
+    builder.addVarValue(x, zero);
+    builder.addVarValue(y, zero);
+    builder.addVarValue(z, zero);
+    auto model = builder.build();
+    PTRef res = mbp.project(fla, {x}, *model);
+    std::cout << logic.printTerm(res) << std::endl;
+    EXPECT_EQ(res, logic.mkAnd({logic.mkNumLeq(z, y), logic.mkNumLeq(y, one)}));
+}
+
 
 class MBP_IntTest : public ::testing::Test {
 protected:

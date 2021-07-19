@@ -289,9 +289,9 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
     }
 
     implicant_t newLiterals;
-    if (uBounds.size() == 1) {
+    if (uBounds.size() == 1 or lBounds.size() == 1) {
         // Do full elimination with single bound; This yields more general result
-        auto subRes = substituteBound(uBounds[0], lBounds, *lalogic);
+        auto subRes = uBounds.size() == 1 ? substituteBound(uBounds[0], lBounds, *lalogic) : substituteBound(lBounds[0], uBounds, *lalogic);
         assert(std::all_of(subRes.begin(), subRes.end(), [&](PTRef lit) { return model.evaluate(lit) == logic.getTerm_true(); }));
         newLiterals.resize(subRes.size());
         std::transform(subRes.begin(), subRes.end(), newLiterals.begin(),
@@ -316,6 +316,13 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
             auto const & otherVal = lalogic->getNumConst(otherValRef);
             if (otherVal > currentVal or (otherVal == currentVal and bound.strict)) {
                 highestLowerBound = &bound;
+            } else if (otherVal == currentVal) {
+                // check if this bound should not be preferred because it is also upper bound
+                auto it = std::find_if(uBounds.begin(), uBounds.end(), [&bound](Bound const & ubound) { return ubound.val == bound.val; });
+                if (it != uBounds.end()) {
+                    highestLowerBound = &bound;
+                    break;
+                }
             }
         }
         // perform substitution
