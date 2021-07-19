@@ -854,21 +854,44 @@ bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
         MainSolver solver(logic, config, "Fixed-point checker");
         solver.insertFormula(logic.mkAnd({currentTwoStep, logic.mkNot(shifted)}));
         sstat satres = solver.check();
-        bool restrictedInvariant = false;
+        char restrictedInvariant = 0;
         if (satres != s_False) {
             solver.push();
             solver.insertFormula(getNextVersion(logic.mkAnd(init, getLessThanPower(i)), -1));
             satres = solver.check();
             if (satres == s_False) {
-                restrictedInvariant = true;
+                restrictedInvariant = 1;
+            }
+        }
+        if (satres != s_False) {
+            solver.pop();
+            solver.push();
+            solver.insertFormula(logic.mkAnd(getNextVersion(getLessThanPower(i), 2), getNextVersion(query, 3)));
+            satres = solver.check();
+            if (satres == s_False) {
+                restrictedInvariant = 2;
             }
         }
         if (satres == s_False) {
             if (verbose() > 0) {
                 std::cout << "; Fixed point detected in equals relation on level " << i << " from " << power << std::endl;
-                std::cout << "; Fixed point detected for " << (not restrictedInvariant ? "whole transition relation" : "transition relation restricted to init") << std::endl;
+                std::cout << "; Fixed point detected for ";
+                switch (restrictedInvariant) {
+                    case 0:
+                        std::cout << "whole transition relation";
+                        break;
+                    case 1:
+                        std::cout << "transition relation restricted to init";
+                        break;
+                    case 2:
+                        std::cout << "transition relation restricted to bad";
+                        break;
+                    default:
+                        assert(false);
+                }
+                std::cout << std::endl;
             }
-            if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
+            if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true" and restrictedInvariant != 2) {
                 if (i <= 10) {
 //                    std::cout << "Computing inductive invariant" << std::endl;
                     assert(verifyLessThanPower(i));
