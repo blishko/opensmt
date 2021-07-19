@@ -280,7 +280,7 @@ VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
         return VerificationResult::UNSAFE;
     } else if (isUnreachable(res)) {
         if (verbose() > 0) {
-            std::cout << "System is safe up to <2^" << power - 1 << " steps" << std::endl;
+            std::cout << "; System is safe up to <2^" << power - 1 << " steps" << std::endl;
         }
         // Check if we have not reached fixed point.
         if (power >= 3) {
@@ -301,7 +301,7 @@ VerificationResult AcceleratedBmc::checkPower(unsigned short power) {
         return VerificationResult::UNSAFE;
     } else if (isUnreachable(res)) {
         if (verbose() > 0) {
-            std::cout << "System is safe up to 2^" << power - 1 << " steps" << std::endl;
+            std::cout << "; System is safe up to 2^" << power - 1 << " steps" << std::endl;
         }
         return VerificationResult::UNKNOWN;
     } else {
@@ -803,8 +803,8 @@ bool AcceleratedBmc::checkLessThanFixedPoint(unsigned short power) {
             }
             if (satres == s_False) {
                 if (verbose() > 0) {
-                    std::cout << "Right fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
-                    std::cout << "Fixed point detected for " << (not restrictedInvariant ? "whole transition relation" : "transition relation restricted to init") << std::endl;
+                    std::cout << "; Right fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
+                    std::cout << "; Fixed point detected for " << (not restrictedInvariant ? "whole transition relation" : "transition relation restricted to init") << std::endl;
                 }
                 if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
 //                     std::cout << "Computing inductive invariant" << std::endl;
@@ -829,8 +829,8 @@ bool AcceleratedBmc::checkLessThanFixedPoint(unsigned short power) {
             }
             if (satres == s_False) {
                 if (verbose() > 0) {
-                    std::cout << "Left fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
-                    std::cout << "Fixed point detected for " << (not restrictedInvariant ? "whole transition relation" : "transition relation restricted to bad") << std::endl;
+                    std::cout << "; Left fixed point detected in less-than relation on level " << i << " from " << power << std::endl;
+                    std::cout << "; Fixed point detected for " << (not restrictedInvariant ? "whole transition relation" : "transition relation restricted to bad") << std::endl;
                 }
                 if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
                     // std::cout << "Computing inductive invariant" << std::endl;
@@ -865,8 +865,8 @@ bool AcceleratedBmc::checkExactFixedPoint(unsigned short power) {
         }
         if (satres == s_False) {
             if (verbose() > 0) {
-                std::cout << "Fixed point detected in equals relation on level " << i << " from " << power << std::endl;
-                std::cout << "Fixed point detected for " << (not restrictedInvariant ? "whole transition relation" : "transition relation restricted to init") << std::endl;
+                std::cout << "; Fixed point detected in equals relation on level " << i << " from " << power << std::endl;
+                std::cout << "; Fixed point detected for " << (not restrictedInvariant ? "whole transition relation" : "transition relation restricted to init") << std::endl;
             }
             if (options.hasOption(Options::COMPUTE_WITNESS) and options.getOption(Options::COMPUTE_WITNESS) == "true") {
                 if (i <= 10) {
