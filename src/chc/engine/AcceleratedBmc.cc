@@ -528,7 +528,8 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
                 if (power == 2) { // Since it was not reachable in 0 steps (checked above), here it means it was reachable in exactly 1 step
                     result.result = ReachabilityResult::REACHABLE;
                     // TODO: this could be simplified, but I need refineOneStepTarget
-                    result.refinedTarget = getNextVersion(refineTwoStepTarget(from, logic.mkAnd(previousLessThanTransition, translatedExactTransition), goal, *model), -2);
+                    PTRef refinedTarget = refineTwoStepTarget(from, logic.mkAnd(previousLessThanTransition, translatedExactTransition), goal, *model);
+                    result.refinedTarget = logic.mkAnd(to, getNextVersion(refinedTarget, -2));
                     TRACE(3, "Less-than: Truly reachable states are " << result.refinedTarget.x)
                     return result;
                 }
