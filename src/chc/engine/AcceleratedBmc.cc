@@ -69,6 +69,7 @@ public:
 };
 
 class SolverWrapperIncremental : public SolverWrapper {
+protected:
     Logic & logic;
     SMTConfig config;
     sstat lastResult = s_Undef;
@@ -144,6 +145,47 @@ public:
     }
 };
 
+class SolverWrapperIncrementalWithRestarts : public SolverWrapperIncremental {
+    vec<PTRef> transitionComponents;
+    const unsigned limit = 100;
+    unsigned levels = 0;
+
+    void rebuildSolver() {
+        solver.reset(new MainSolver(logic, config, "incremental reachability checker"));
+        PTRef consolidatedTransition = logic.mkAnd(transitionComponents);
+        solver->insertFormula(consolidatedTransition);
+        levels = 0;
+        allformulasInserted = 0;
+        mask = 0;
+        opensmt::setbit(mask, allformulasInserted++);
+        transitionComponents.clear();
+        transitionComponents.push(consolidatedTransition);
+    }
+
+public:
+    SolverWrapperIncrementalWithRestarts(Logic & logic, PTRef transition) : SolverWrapperIncremental(logic, transition) {
+        transitionComponents.push(transition);
+    }
+
+
+    ReachabilityResult checkConsistent(PTRef query) override {
+        ++levels;
+        if (levels > limit) {
+//            std::cout << "Rebuilding solver after " << levels << " pushes" << std::endl;
+            rebuildSolver();
+        }
+        return SolverWrapperIncremental::checkConsistent(query);
+    }
+
+    void strenghtenTransition(PTRef nTransition) override {
+        SolverWrapperIncremental::strenghtenTransition(nTransition);
+        transitionComponents.push(nTransition);
+        ++levels;
+    }
+
+
+};
+
 AcceleratedBmc::~AcceleratedBmc() {
     for (SolverWrapper* solver : reachabilitySolvers) {
         delete solver;
@@ -191,7 +233,8 @@ void AcceleratedBmc::storeExactPower(unsigned short power, PTRef tr) {
     reachabilitySolvers.growTo(power + 2, nullptr);
     PTRef nextLevelTransitionStrengthening = logic.mkAnd(tr, getNextVersion(tr));
     if (not reachabilitySolvers[power + 1]) {
-        reachabilitySolvers[power + 1] = new SolverWrapperIncremental(logic, nextLevelTransitionStrengthening);
+        reachabilitySolvers[power + 1] = new SolverWrapperIncrementalWithRestarts(logic, nextLevelTransitionStrengthening);
+//        reachabilitySolvers[power + 1] = new SolverWrapperIncremental(logic, nextLevelTransitionStrengthening);
 //        reachabilitySolvers[power + 1] = new SolverWrapperSingleUse(logic, nextLevelTransitionStrengthening);
     } else {
         reachabilitySolvers[power + 1]->strenghtenTransition(nextLevelTransitionStrengthening);
