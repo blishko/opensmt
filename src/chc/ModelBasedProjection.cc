@@ -192,8 +192,8 @@ ModelBasedProjection::implicant_t ModelBasedProjection::projectSingleVar(PTRef v
                 // express variable and substitute in the rest of literals
                 PTRef zeroTerm = lalogic->mkNumMinus(lhs, rhs);
                 PTRef substitutionTerm = utils.expressZeroTermFor(zeroTerm, var);
-                MapWithKeys<PTRef, PtAsgn, PTRefHash> subst;
-                subst.insert(var, PtAsgn(substitutionTerm, l_True));
+                MapWithKeys<PTRef, PTRef, PTRefHash> subst;
+                subst.insert(var, substitutionTerm);
                 Substitutor substitutor(logic, subst);
                 for (auto it2 = implicant.begin(); it2 != interestingEnd; ++it2) {
                     it2->tr = substitutor.rewrite(it2->tr);
@@ -462,9 +462,9 @@ PTRef ModelBasedProjection::project(PTRef fla, const vec<PTRef> & varsToEliminat
     });
 
     if (boolEndIt != tmp.begin()) { // there are some booleans
-        MapWithKeys<PTRef, PtAsgn, PTRefHash> subst;
+        MapWithKeys<PTRef, PTRef, PTRefHash> subst;
         for (auto it = tmp.begin(); it != boolEndIt; ++it) {
-            subst.insert(*it, PtAsgn(model.evaluate(*it), l_True));
+            subst.insert(*it, model.evaluate(*it));
         }
         fla = Substitutor(logic, subst).rewrite(fla);
     }

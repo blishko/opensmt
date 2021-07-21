@@ -45,9 +45,9 @@ public:
     }
 
     PTRef varSubstitute(PTRef term, substitutions_map const & subMap) const {
-        MapWithKeys<PTRef, PtAsgn, PTRefHash> map;
+        MapWithKeys<PTRef, PTRef, PTRefHash> map;
         for (auto const & entry : subMap) {
-            map.insert(entry.first, PtAsgn(entry.second, l_True));
+            map.insert(entry.first, entry.second);
         }
         return Substitutor(logic, map).rewrite(term);
     }
