@@ -95,7 +95,7 @@ private:
     PTRef getNextVersion(PTRef currentVersion, int) const ;
     PTRef getNextVersion(PTRef currentVersion) const { return getNextVersion(currentVersion, 1); };
 
-    vec<PTRef> getStateVars(int version);
+    vec<PTRef> getStateVars(int version) const;
 
     /* Shifts only next-next vars to next vars */
     PTRef cleanInterpolant(PTRef itp);
@@ -125,6 +125,9 @@ private:
     int verbose() const {
         return verbosity;
     }
+
+    bool isPureStateFormula(PTRef fla) const;
+    bool isPureTransitionFormula(PTRef fla) const;
 };
 
 

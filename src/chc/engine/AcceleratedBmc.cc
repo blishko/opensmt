@@ -225,6 +225,9 @@ PTRef AcceleratedBmc::getExactPower(unsigned short power) const {
 
 void AcceleratedBmc::storeExactPower(unsigned short power, PTRef tr) {
 //    std::cout << "Strengthening exact reachability on level " << power << " with " << logic.printTerm(tr) << std::endl;
+    if (power >= 2 and not isPureTransitionFormula(tr)) {
+        throw std::logic_error("Transition relation has some auxiliary variables!");
+    }
     exactPowers.growTo(power + 1, PTRef_Undef);
     PTRef current = exactPowers[power];
     PTRef toStore = current == PTRef_Undef ? tr : logic.mkAnd(current, tr);
@@ -249,6 +252,9 @@ PTRef AcceleratedBmc::getLessThanPower(unsigned short power) const {
 void AcceleratedBmc::storeLessThanPower(unsigned short power, PTRef tr) {
 //    std::cout << "Strengthening less-than reachability on level " << power << " with " << logic.printTerm(tr) << std::endl;
     assert(power >= 0);
+    if (power >= 2 and not isPureTransitionFormula(tr)) {
+        throw std::logic_error("Transition relation has some auxiliary variables!");
+    }
     lessThanPowers.growTo(power + 1, PTRef_Undef);
     PTRef current = lessThanPowers[power];
     PTRef toStore = current == PTRef_Undef ? tr : logic.mkAnd(current, tr);
@@ -260,7 +266,7 @@ SolverWrapper* AcceleratedBmc::getExactReachabilitySolver(unsigned short power) 
     return reachabilitySolvers[power];
 }
 
-vec<PTRef> AcceleratedBmc::getStateVars(int version) {
+vec<PTRef> AcceleratedBmc::getStateVars(int version) const {
     vec<PTRef> versioned;
     TimeMachine timeMachine(logic);
     for (PTRef var : stateVariables) {
@@ -430,7 +436,7 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryExact(PTRef from, P
                 }
                 // Create the three states corresponding to current, next and next-next variables from the query
 //              PTRef modelMidpoint = getNextVersion(extractStateFromModel(getStateVars(1), *model), -1);
-                PTRef nextState = getNextVersion(extractMidPoint(from, previousTransition, translatedPreviousTransition, goal, *model), -1);
+                PTRef nextState = extractMidPoint(from, previousTransition, translatedPreviousTransition, goal, *model);
 //              std::cout << "Midpoint single point: " << logic.printTerm(modelMidpoint) << '\n';
                 TRACE(3,"Midpoint from MBP: " << nextState.x)
                 // check the reachability using lower level abstraction
@@ -576,7 +582,7 @@ AcceleratedBmc::QueryResult AcceleratedBmc::reachabilityQueryLessThan(PTRef from
                     TRACE(3, "Less-than: Truly reachable states are " << result.refinedTarget.x)
                     return result;
                 }
-                PTRef nextState = getNextVersion(extractMidPoint(from, previousLessThanTransition, translatedExactTransition, goal, *model), -1);
+                PTRef nextState = extractMidPoint(from, previousLessThanTransition, translatedExactTransition, goal, *model);
                 TRACE(3, "Midpoint is " << nextState.x)
                 // check the reachability using lower level abstraction
                 auto subQueryRes = reachabilityQueryLessThan(from, nextState, power - 1);
@@ -679,8 +685,14 @@ void AcceleratedBmc::resetTransitionSystem(TransitionSystem const & system) {
     }
     this->init = utils.varSubstitute(system.getInit(), substMap);
     this->init = utils.toNNF(this->init);
+    if (not isPureStateFormula(init)) {
+        throw std::logic_error("Initial states contain some non-state variable");
+    }
     this->query = utils.varSubstitute(system.getQuery(), substMap);
     this->query = utils.toNNF(this->query);
+    if (not isPureStateFormula(query)) {
+        throw std::logic_error("Query states contain some non-state variable");
+    }
     auto nextStateVars = system.getNextStateVars();
     vec<PTRef> currentNextEqs;
     assert(nextStateVars.size() == stateVars.size());
@@ -753,17 +765,13 @@ PTRef AcceleratedBmc::extractMidPoint(PTRef start, PTRef firstTransition, PTRef 
     ModelBasedProjection mbp(logic);
     PTRef transitionQuery = logic.mkAnd({start, firstTransition, secondTransition, goal});
     assert(model.evaluate(transitionQuery) == logic.getTerm_true());
-    auto nextStateVars = getStateVars(1);
-    TermUtils utils(logic);
-    auto vars = utils.getVars(transitionQuery);
-    vec<PTRef> toEliminate;
-    for (PTRef var : vars) {
-        auto it = std::find(nextStateVars.begin(), nextStateVars.end(), var);
-        if (it == nextStateVars.end()) {
-            toEliminate.push(var);
-        }
+    vec<PTRef> toEliminate = getStateVars(0);
+    for (PTRef var : getStateVars(2)) {
+        toEliminate.push(var);
     }
     PTRef midPoint = mbp.project(transitionQuery, toEliminate, model);
+    midPoint = getNextVersion(midPoint, -1);
+    assert(isPureStateFormula(midPoint));
     return midPoint;
 }
 
@@ -1047,4 +1055,22 @@ bool AcceleratedBmc::verifyKinductiveInvariant(PTRef fla, unsigned long k) {
         return false;
     }
     return true;
+}
+
+bool AcceleratedBmc::isPureStateFormula(PTRef fla) const {
+    auto vars = TermUtils(logic).getVars(fla);
+    auto stateVars = getStateVars(0);
+    return std::all_of(vars.begin(), vars.end(), [&](PTRef var) {
+       return std::find(stateVars.begin(), stateVars.end(), var) != stateVars.end();
+    });
+}
+
+bool AcceleratedBmc::isPureTransitionFormula(PTRef fla) const {
+    auto vars = TermUtils(logic).getVars(fla);
+    auto stateVars = getStateVars(0);
+    auto nextStateVars = getStateVars(1);
+    return std::all_of(vars.begin(), vars.end(), [&](PTRef var) {
+        return std::find(stateVars.begin(), stateVars.end(), var) != stateVars.end()
+            or std::find(nextStateVars.begin(), nextStateVars.end(), var) != nextStateVars.end();
+    });
 }
