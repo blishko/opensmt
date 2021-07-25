@@ -6,8 +6,7 @@
 #include "UFLRALogic.h"
 
 UFLRATHandler::UFLRATHandler(SMTConfig & c, UFLRALogic & l)
-        : LRATHandler(c, l)
-        , logic(l)
+        : TSolverHandler(c), logic(l)
 {
     lrasolver = new LRASolver(config, logic);
     SolverId lra_id = lrasolver->getId();
@@ -24,8 +23,11 @@ UFLRATHandler::UFLRATHandler(SMTConfig & c, UFLRALogic & l)
 
 UFLRATHandler::~UFLRATHandler() {}
 
-Logic &UFLRATHandler::getLogic()
-{
+Logic & UFLRATHandler::getLogic() {
+    return logic;
+}
+
+Logic const & UFLRATHandler::getLogic() const {
     return logic;
 }
 

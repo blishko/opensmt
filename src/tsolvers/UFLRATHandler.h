@@ -32,7 +32,7 @@ class Egraph;
 class UFLRALogic;
 class LRASolver;
 
-class UFLRATHandler : public LRATHandler
+class UFLRATHandler : public TSolverHandler
 {
   private:
     UFLRALogic    &logic;
@@ -40,10 +40,11 @@ class UFLRATHandler : public LRATHandler
     Egraph        *ufsolver;
   public:
     UFLRATHandler(SMTConfig & c, UFLRALogic & l);
-    virtual ~UFLRATHandler();
-    virtual Logic& getLogic();
+    ~UFLRATHandler() override;
+    Logic& getLogic() override;
+    const Logic& getLogic() const override;
 
-    virtual PTRef getInterpolant(const ipartitions_t& mask, map<PTRef, icolor_t> *labels, PartitionManager &pmanager);
+    PTRef getInterpolant(const ipartitions_t& mask, map<PTRef, icolor_t> *labels, PartitionManager &pmanager) override;
 };
 
 #endif
