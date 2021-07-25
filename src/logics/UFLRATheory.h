@@ -49,6 +49,8 @@ class UFLRATheory : public Theory
 
 protected:
     PTRef purify(PTRef fla);
+    PTRef addEqDefinitionsAndTrichotomyAxioms(PTRef fla);
+    bool isPureLA(PTRef) const;
 };
 
 #endif

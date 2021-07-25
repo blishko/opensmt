@@ -13,7 +13,8 @@ bool UFLRATheory::simplify(const vec<PFRef>& formulas, PartitionManager &pmanage
     // Let's ignore substitution for now
     PTRef fla = logic.mkAnd(currentFrame.formulas);
     PTRef purified = purify(fla);
-    currentFrame.root = purified;
+    PTRef enriched = addEqDefinitionsAndTrichotomyAxioms(purified);
+    currentFrame.root = enriched;
     return true;
 }
 
@@ -75,4 +76,67 @@ PTRef UFLRATheory::purify(PTRef fla) {
     }
     equalities.push(Substitutor(logic, purificationMap).rewrite(fla));
     return logic.mkAnd(equalities);
+}
+
+class CollectEqsConfig : public DefaultVisitorConfig {
+    vec<PTRef> numEqs;
+    UFLRALogic & logic;
+
+public:
+    CollectEqsConfig(UFLRALogic & logic) : DefaultVisitorConfig(), logic(logic) {}
+
+    bool previsit(PTRef ptref) override {
+        return logic.hasSortBool(ptref);
+    }
+
+    void visit(PTRef ptref) override {
+        if (logic.isNumEq(ptref)) {
+            numEqs.push(ptref);
+        }
+    }
+
+    vec<PTRef> const & getEqs() const { return numEqs; }
+};
+
+PTRef UFLRATheory::addEqDefinitionsAndTrichotomyAxioms(PTRef fla) {
+    CollectEqsConfig config(logic);
+    TermVisitor<CollectEqsConfig>(logic, config).visit(fla);
+    auto const & eqs = config.getEqs();
+
+    vec<PTRef> axioms;
+    for (PTRef eq : eqs) {
+        if (not isPureLA(eq)) {
+            continue;
+        }
+        PTRef lhs = logic.getPterm(eq)[0];
+        PTRef rhs = logic.getPterm(eq)[1];
+        // x = y => x <= y and x >= y
+        PTRef definition = logic.mkOr({logic.mkNot(eq), logic.mkNumLeq(lhs, rhs), logic.mkNumLeq(rhs, lhs)});
+        axioms.push(definition);
+        // x = y or x > y or x < y
+        PTRef trichotomy = logic.mkOr({eq, logic.mkNumGt(lhs, rhs), logic.mkNumGt(rhs, lhs)});
+        axioms.push(trichotomy);
+    }
+    vec<PTRef> & nArgs = axioms;
+    nArgs.push(fla);
+    return logic.mkAnd(nArgs);
+}
+
+bool UFLRATheory::isPureLA(PTRef term) const {
+    class UFFinderConfig : public DefaultVisitorConfig {
+        UFLRALogic & logic;
+    public:
+        UFFinderConfig(UFLRALogic & logic) : DefaultVisitorConfig(), logic(logic) {}
+        bool previsit(PTRef term) override { return not ufFound; }
+
+        void visit(PTRef term) override {
+            if (logic.isUninterpreted(logic.getSymRef(term))) {
+                ufFound = true;
+            }
+        }
+
+        bool ufFound = false;
+    } config(logic);
+    TermVisitor<UFFinderConfig>(logic, config).visit(term);
+    return not config.ufFound;
 }

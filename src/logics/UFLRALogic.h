@@ -15,6 +15,7 @@ public:
         return opensmt::Logic_t::QF_UFLRA;
     }
 
+    // TODO: Unify this with Logic::isUF
     bool isInterpreted(SymRef sym) const {
         return hasSortNum(sym) and not isVar(sym) and not isUF(sym);
     }
@@ -24,5 +25,9 @@ public:
     }
 
     bool isNumVarLike(SymRef tr) const override { return isNumVarOrIte(tr) or isUninterpreted(tr); }
+
+    bool isUFEquality(PTRef tr) const override { return Logic::isUFEquality(tr); }
+    bool isTheoryEquality(PTRef tr) const override { return LALogic::isTheoryEquality(tr) or Logic::isTheoryEquality(tr); }
+    bool isUF(SymRef sr) const override { return Logic::isUF(sr); }
 
 };
