@@ -65,16 +65,39 @@ public:
 };
 }
 
+namespace{
+void closeSubstitutionMapOnKeys(Logic & logic, Logic::SubstMap & substMap) {
+    vec<PTRef> newKeys;
+    vec<PTRef> values;
+    vec<PTRef> oldKeys;
+    substMap.getKeys().copyTo(oldKeys);
+    for (PTRef oldKey : oldKeys) {
+        PTRef newKey = Substitutor(logic, substMap).rewrite(oldKey);
+        if (newKey != oldKey and newKey != substMap[oldKey]) {
+            newKeys.push(newKey);
+            values.push(substMap[oldKey]);
+        }
+    }
+    assert(newKeys.size() == values.size());
+    for (int i = 0; i < newKeys.size(); ++i) {
+        substMap.insert(newKeys[i], values[i]);
+    }
+}
+}
+
 PTRef UFLRATheory::purify(PTRef fla) {
     Purifier purifier(logic);
     purifier.visit(fla);
     auto const & purificationMap = purifier.getPurificationMap();
+    Logic::SubstMap closedPurificationMap;
+    purificationMap.copyTo(closedPurificationMap);
+    closeSubstitutionMapOnKeys(logic, closedPurificationMap); // TODO: this should probably be handled better in Substitutor
     vec<PTRef> equalities;
-    equalities.capacity(purificationMap.getSize() + 1);
-    for (PTRef key : purificationMap.getKeys()) {
-        equalities.push(logic.mkEq(key, purificationMap[key]));
+    equalities.capacity(closedPurificationMap.getSize() + 1);
+    for (PTRef key : closedPurificationMap.getKeys()) {
+        equalities.push(logic.mkEq(key, closedPurificationMap[key]));
     }
-    equalities.push(Substitutor(logic, purificationMap).rewrite(fla));
+    equalities.push(Substitutor(logic, closedPurificationMap).rewrite(fla));
     return logic.mkAnd(equalities);
 }
 
