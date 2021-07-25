@@ -26,6 +26,7 @@ public:
 
     bool isNumVarLike(SymRef tr) const override { return isNumVarOrIte(tr) or isUninterpreted(tr); }
 
+    bool isUFTerm(PTRef tr) const override { return Logic::isUFTerm(tr) or hasSortNum(tr); }
     bool isUFEquality(PTRef tr) const override { return Logic::isUFEquality(tr); }
     bool isTheoryEquality(PTRef tr) const override { return LALogic::isTheoryEquality(tr) or Logic::isTheoryEquality(tr); }
     bool isUF(SymRef sr) const override { return Logic::isUF(sr); }

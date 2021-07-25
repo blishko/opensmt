@@ -294,7 +294,7 @@ class Logic {
     virtual bool isBuiltinFunction  (const SymRef sr) const;
     bool         isConstant         (const SymRef sr) const;
     bool         isConstant         (PTRef tr)        const;// { return isConstant(getPterm(tr).symb()); }
-    bool         isUFTerm           (PTRef tr)        const;// { return isUFSort(getSortRef(tr)); }
+    virtual bool isUFTerm           (PTRef tr)        const;// { return isUFSort(getSortRef(tr)); }
     bool         isUFSort           (const SRef sr)   const;// { return ufsorts.has(sr); }
 
     bool         appearsInUF        (PTRef tr)        const;
