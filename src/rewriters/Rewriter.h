@@ -63,7 +63,11 @@ public:
             // The reference "term" has now been possibly invalidated! Do not access it anymore!
             PTRef rewritten = cfg.rewrite(newTerm);
             if (rewritten != newTerm) {
-                substitutions.insert(currentRef, rewritten);
+                if (substitutions.has(currentRef)) {
+                    substitutions[currentRef] = rewritten;
+                } else {
+                    substitutions.insert(currentRef, rewritten);
+                }
             }
             done[currentId] = 1;
             toProcess.pop_back();
