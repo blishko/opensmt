@@ -1929,3 +1929,41 @@ void Egraph::removeFromCdrUseVectorExceptNill(ERef parent, Enode const & parentN
     assert(UseVector::entryToERef(parents[getEnode(cdr.getRoot()).getCid()][cdrParentIndex]) == parent);
     parents[getEnode(cdr.getRoot()).getCid()].clearEntryAt(cdrParentIndex);
 }
+
+vec<PTRef> Egraph::getDeducedEqualities(vec<PTRef> const & vars) {
+    vec<PTRef> result;
+    MapWithKeys<ERef, PTRef, ERefHash> enodes;
+    for (PTRef var : vars) {
+        assert(logic.isVar(var));
+        assert(enode_store.has(var));
+        ERef eref = termToERef(var);
+        assert(not enodes.has(eref));
+        enodes.insert(eref, var);
+    }
+
+    std::unordered_map<ERef, vec<ERef>, ERefHash> eqClasses;
+    for (ERef eref : enodes.getKeys()) {
+        ERef root = getEnode(eref).getRoot();
+        auto it = eqClasses.find(root);
+        if (it == eqClasses.end()) {
+            auto insertRes = eqClasses.emplace(root, vec<ERef>{});
+            assert(insertRes.second); // must have been inserted
+            it = insertRes.first;
+        }
+        it->second.push(eref);
+    }
+
+    for (auto const & entry : eqClasses) {
+        auto const & equivalentVars = entry.second;
+        for (int i = 0; i < equivalentVars.size(); ++i) {
+            for (int j = i + 1; j < equivalentVars.size(); ++j) {
+                PTRef eq = logic.mkEq(ERefToTerm(equivalentVars[i]), ERefToTerm(equivalentVars[j]));
+                if (not enode_store.has(eq)) {
+                    result.push(eq);
+                }
+            }
+        }
+    }
+
+    return result;
+}

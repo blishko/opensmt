@@ -38,6 +38,10 @@ class UFLRATHandler : public TSolverHandler
     UFLRALogic    &logic;
     LRASolver     *lrasolver;
     Egraph        *ufsolver;
+
+    vec<PTRef> interfaceVariables;
+    vec<PTRef> equalitiesToPropagate;
+
   public:
     UFLRATHandler(SMTConfig & c, UFLRALogic & l);
     ~UFLRATHandler() override;
@@ -45,6 +49,12 @@ class UFLRATHandler : public TSolverHandler
     const Logic& getLogic() const override;
 
     PTRef getInterpolant(const ipartitions_t& mask, map<PTRef, icolor_t> *labels, PartitionManager &pmanager) override;
+
+    TRes check(bool b) override;
+
+    void declareAtom(PTRef tr) override;
+
+
 };
 
 #endif

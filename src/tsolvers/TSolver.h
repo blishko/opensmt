@@ -194,6 +194,9 @@ public:
     virtual void getNewSplits(vec<PTRef>&);               // Return new splits if any
     virtual PtAsgn_reason getDeduction();                 // Return an implied literal based on the current state
 
+    // Return equalities that should hold over the given variables
+    virtual vec<PTRef> getDeducedEqualities(vec<PTRef> const& vars) { return {}; }
+
     SolverId getId() { return id; }
     bool hasExplanation() { return has_explanation; }
     virtual void declareAtom(PTRef tr) = 0;

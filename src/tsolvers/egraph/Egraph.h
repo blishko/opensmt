@@ -278,6 +278,7 @@ public:
     void       computeModel            () override;
     void       clearModel              ();
     void       splitOnDemand           (vec<PTRef> &, int) {};       // Splitting on demand modulo equality
+    vec<PTRef> getDeducedEqualities(vec<PTRef> const & vars) override;
 
 
 #if MORE_DEDUCTIONS
