@@ -118,20 +118,15 @@ TRes THandler::check(bool complete) {
 //    verifyCallWithExternalTool( res, trail.size( ) - 1 );
 }
 
-void THandler::getNewSplits(vec<Lit> &splits) {
-    vec<PTRef> split_terms;
-    for (int i = 0; i < getSolverHandler().tsolvers.size(); i++) {
-        if (getSolverHandler().tsolvers[i] != nullptr && getSolverHandler().tsolvers[i]->hasNewSplits()) {
-            getSolverHandler().tsolvers[i]->getNewSplits(split_terms);
-            break;
-        }
+std::vector<vec<Lit>> THandler::getNewSplits() {
+    auto split_terms = getSolverHandler().getNewSplits();
+    if (split_terms.size() == 0) {
+        return {};
     }
-
-    if ( split_terms.size() == 0 ) {
-        return;
-    }
-
+    std::vector<vec<Lit>> splits;
     assert(split_terms.size() == 1);
+    splits.emplace_back();
+    vec<Lit> & splitClause = splits.back();
     PTRef tr = split_terms[0];
     split_terms.pop();
     Logic & logic = getLogic();
@@ -141,9 +136,9 @@ void THandler::getNewSplits(vec<Lit> &splits) {
         Lit l = tmap.getOrCreateLit(arg);
         assert(getLogic().isAtom(arg)); // MB: Needs to be an atom, otherwise the declaration would not work.
         declareAtom(arg);
-        informNewSplit(arg);
-        splits.push(l);
+        splitClause.push(l);
     }
+    return splits;
 }
 
 //
@@ -511,7 +506,6 @@ void    THandler::computeModel      () { getSolverHandler().computeModel(); } //
 void    THandler::clearModel        () { /*getSolverHandler().clearModel();*/ }   // Clear the model if necessary
 
 bool    THandler::assertLit         (PtAsgn pta) { return getSolverHandler().assertLit(pta); } // Push the assignment to all theory solvers
-void    THandler::informNewSplit    (PTRef tr) { getSolverHandler().informNewSplit(tr);  } // The splitting variable might need data structure changes in the solver (e.g. LIA needs to re-build bounds)
 
 void THandler::declareAtom(PTRef tr) {
     Var v = ptrefToVar(tr);

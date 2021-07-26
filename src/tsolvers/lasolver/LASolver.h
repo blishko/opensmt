@@ -81,12 +81,11 @@ protected:
     // Possible internal states of the solver
     typedef enum
     {
-        INIT, INCREMENT, SAT, UNSAT, NEWSPLIT, UNKNOWN, ERROR
+        SAT, UNSAT, NEWSPLIT, UNKNOWN, ERROR
     } LASolverStatus;
 
     //opensmt::Real delta; // The size of one delta.  Set through computeModel()
     LASolverStats tsolver_stats;
-    void setBound(PTRef leq);
     bool assertBoundOnVar(LVRef it, LABoundRef itBound_ref);
 
 protected:
@@ -103,7 +102,6 @@ public:
     virtual void clearSolver() override; // Remove all problem specific data from the solver.  Should be called each time the solver is being used after a push or a pop in the incremental interface.
 
     void  declareAtom        (PTRef tr) override;                // Inform the theory solver about the existence of an atom
-    void  informNewSplit     (PTRef tr) override;                // Update bounds for the split variable
     bool  check_simplex      (bool);
     bool  assertLit          ( PtAsgn ) override;                // Push the constraint into Solver
     void  pushBacktrackPoint ( ) override;                       // Push a backtrack point
@@ -146,7 +144,6 @@ protected:
     unsigned getIteratorByPTRef( PTRef e, bool );                                                 // find bound iterator by the PTRef
     inline bool getStatus( );                               // Read the status of the solver in lbool
     bool setStatus( LASolverStatus );               // Sets and return status of the solver
-    void initSolver( );                                     // Initializes the solver
 
     void computeConcreteModel(LVRef v, const opensmt::Real& d);
     void computeModel() override;

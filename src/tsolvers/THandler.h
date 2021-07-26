@@ -63,7 +63,7 @@ public:
     TermMapper&           getTMap()      ;//          { return tmap; }
 
     void    getConflict          ( vec<Lit>&, vec<VarData>&, int & ); // Returns theory conflict in terms of literals
-    void    getNewSplits         ( vec<Lit>& ); // Return the new splits as a vector of literals that needs to be interpreted as a clause.
+    std::vector<vec<Lit>> getNewSplits(); // Return the new splits as a vector of literals that needs to be interpreted as a clause.
 
     PTRef   getInterpolant       (const ipartitions_t&, map<PTRef, icolor_t>*, PartitionManager &pmanager);
     Lit     getDeduction         ();                      // Returns a literal that is implied by the current state and the reason literal
@@ -91,7 +91,6 @@ public:
     bool    assertLits        (const vec<Lit> &);             // Give to the TSolvers the newly added literals on the trail
     bool    assertLit         (PtAsgn pta);// { return getSolverHandler().assertLit(pta); } // Push the assignment to all theory solvers
     void    declareAtom       (PTRef tr);
-    void    informNewSplit    (PTRef tr); // Splitting variable data structure updates (e.g., recompute bounds list)
     TRes    check             (bool);       // Check trail in the theories
     void    backtrack         (int);        // Remove literals that are not anymore on the trail
 
