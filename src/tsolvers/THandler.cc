@@ -124,19 +124,19 @@ std::vector<vec<Lit>> THandler::getNewSplits() {
         return {};
     }
     std::vector<vec<Lit>> splits;
-    assert(split_terms.size() == 1);
-    splits.emplace_back();
-    vec<Lit> & splitClause = splits.back();
-    PTRef tr = split_terms[0];
-    split_terms.pop();
-    Logic & logic = getLogic();
-    assert(logic.isOr(tr));
-    for (int i = 0; i < logic.getPterm(tr).size(); i++) {
-        PTRef arg = logic.getPterm(tr)[i];
-        Lit l = tmap.getOrCreateLit(arg);
-        assert(getLogic().isAtom(arg)); // MB: Needs to be an atom, otherwise the declaration would not work.
-        declareAtom(arg);
-        splitClause.push(l);
+    for (auto const & clauseTerm : split_terms) {
+        splits.emplace_back();
+        vec<Lit> & splitClause = splits.back();
+        Logic & logic = getLogic();
+        assert(logic.isOr(clauseTerm));
+        for (int i = 0; i < logic.getPterm(clauseTerm).size(); i++) {
+            PTRef litTerm = logic.getPterm(clauseTerm)[i];
+            Lit l = tmap.getOrCreateLit(litTerm);
+            PTRef atomTerm = logic.isNot(litTerm) ? logic.getPterm(litTerm)[0] : litTerm;
+            assert(getLogic().isAtom(atomTerm)); // MB: Needs to be an atom, otherwise the declaration would not work.
+            declareAtom(atomTerm);
+            splitClause.push(l);
+        }
     }
     return splits;
 }

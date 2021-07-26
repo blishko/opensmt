@@ -93,7 +93,7 @@ TRes TSolverHandler::check(bool complete)
     return res_final;
 }
 
-vec<PTRef> TSolverHandler::getNewSplits() const {
+vec<PTRef> TSolverHandler::getNewSplits() {
     vec<PTRef> split_terms;
     for (int i = 0; i < tsolvers.size(); i++) {
         if (tsolvers[i] != nullptr && tsolvers[i]->hasNewSplits()) {

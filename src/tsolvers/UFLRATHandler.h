@@ -54,6 +54,8 @@ class UFLRATHandler : public TSolverHandler
 
     void declareAtom(PTRef tr) override;
 
+    vec<PTRef> getNewSplits() override;
+
 
 };
 

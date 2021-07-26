@@ -75,3 +75,28 @@ void UFLRATHandler::declareAtom(PTRef tr) {
     }
 }
 
+vec<PTRef> UFLRATHandler::getNewSplits() {
+    vec<PTRef> res;
+    if (equalitiesToPropagate.size() > 0) {
+        for (PTRef eq : equalitiesToPropagate) {
+            // create clauses corresponding to "x = y iff x >= y and x <= y"
+            assert(logic.isNumEq(eq));
+            PTRef lhs = logic.getPterm(eq)[0];
+            PTRef rhs = logic.getPterm(eq)[1];
+            assert(logic.isNumVar(lhs) and logic.isNumVar(rhs));
+            PTRef leq = logic.mkNumLeq(lhs, rhs);
+            PTRef geq = logic.mkNumGeq(lhs, rhs);
+            vec<PTRef> args = {eq, logic.mkNot(leq), logic.mkNot(geq)}; // trichotomy clause
+            res.push(logic.mkOr(args));
+            args.clear();
+            args.push(logic.mkNot(eq));
+            args.push(leq);
+            res.push(logic.mkOr(args)); // x = y => x <= y
+            args.last() = geq;
+            res.push(logic.mkOr(args)); // x = y => x >= y
+        }
+        equalitiesToPropagate.clear();
+    }
+    return res;
+}
+
