@@ -210,6 +210,10 @@ vec<PTRefERefPair> EnodeStore::constructTerm(PTRef tr) {
         cdr = ERef_Nil;
     }
 
+    if (containsSig(sym, cdr)) {
+        return {};
+    }
+
     ERef er = addTerm(sym, cdr, tr);
     new_enodes.push({tr, er});
 

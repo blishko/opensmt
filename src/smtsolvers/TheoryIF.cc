@@ -77,20 +77,58 @@ void CoreSMTSolver::crashTest(int rounds, Var var_true, Var var_false)
 }
 
 TPropRes CoreSMTSolver::handleNewSplitClauses(SplitClauses & splitClauses) {
-    assert(splitClauses.size() == 1);
     vec<LitLev> deds;
     deduceTheory(deds); // To remove possible theory deductions
+    TPropRes res = TPropRes::Undef;
+    Lit toPropagate;
+    CRef propagationReason = CRef_Undef;
     for (auto & splitClause : splitClauses) {
-        assert(splitClause.size() == 2); // For now we handle the binary case only.
-        Lit l1 = splitClause[0];
-        Lit l2 = splitClause[1];
+        unsigned satisfied = 0;
+        unsigned falsified = 0;
+        unsigned unknown = 0;
         // MB: ensure the SAT solver knows about the variables and that they are active
-        addVar_(var(l1));
-        addVar_(var(l2));
-        assert(value(l1) == l_Undef || value(l2) == l_Undef);
-        assert(value(l1) != l_True);
-        assert(value(l2) != l_True);
-        if (value(l1) == l_Undef && value(l2) == l_Undef) {
+        int impliedIndex;
+        for (int i = 0; i < splitClause.size(); ++i) {
+            Lit l = splitClause[i];
+            addVar_(var(l));
+            if (value(l) == l_True) { ++satisfied; }
+            else if (value(l) == l_False) { ++falsified; }
+            else { ++unknown; impliedIndex = i; }
+        }
+        if (satisfied == 0 and unknown == 1) { // propagate
+            int backtrackLevel = std::numeric_limits<int>::max();
+            for (Lit l : splitClause) {
+                if (value(l) == l_False and vardata[var(l)].level < backtrackLevel) {
+                    backtrackLevel = vardata[var(l)].level;
+                }
+            }
+            cancelUntil(backtrackLevel);
+            if (!this->logsProofForInterpolation()) {
+                if (decisionLevel() == 0) {
+                    // MB: do not allocate, we can directly enqueue the implied literal
+                    toPropagate = splitClause[impliedIndex];
+                    propagationReason = CRef_Undef;
+                    res = TPropRes::Propagate;
+                    continue;
+                }
+            }
+            // MB: we are going to propagate, make sure the implied literal is the first one
+            Lit implied = splitClause[impliedIndex];
+            if (impliedIndex != 0) {
+                splitClause[impliedIndex] = splitClause[0];
+                splitClause[0] = implied;
+            }
+            CRef cr = ca.alloc(splitClause, false);
+            attachClause(cr);
+            clauses.push(cr);
+            if (logsProofForInterpolation()) {
+                // MB: the proof needs to know about the new clause
+                proof->newSplitClause(cr);
+            }
+            toPropagate = implied;
+            propagationReason = cr;
+            res = TPropRes::Propagate;
+        } else {
             // MB: allocate, attach and remember the clause - treated as original
             // MB: TODO: why not theory clause?
             CRef cr = ca.alloc(splitClause, false);
@@ -100,40 +138,20 @@ TPropRes CoreSMTSolver::handleNewSplitClauses(SplitClauses & splitClauses) {
                 // MB: the proof needs to know about the new clause
                 proof->newSplitClause(cr);
             }
-            forced_split = ~l1;
-            return TPropRes::Decide;
-        } else {
-            Lit l_f = value(l1) == l_False ? l1 : l2; // false literal
-            Lit l_i = value(l1) == l_False ? l2 : l1; // implied literal
-
-            assert(value(l_f) == l_False);
-            int lev = vardata[var(l_f)].level;
-            cancelUntil(lev);
-            if (!this->logsProofForInterpolation()) {
-                if (decisionLevel() == 0) {
-                    // MB: do not allocate, we can directly enqueue the implied literal
-                    uncheckedEnqueue(l_i);
-                    return TPropRes::Propagate;
+            if (satisfied == 0) {
+                forced_split = ~splitClause[0];
+                if (res != TPropRes::Propagate) {
+                    res = TPropRes::Decide;
                 }
             }
-            // MB: we are going to propagate, make sure the implied literal is the first one
-            if (l_i != splitClause[0]) {
-                splitClause[0] = l_i;
-                splitClause[1] = l_f;
-            }
-            CRef cr = ca.alloc(splitClause, false);
-            attachClause(cr);
-            clauses.push(cr);
-            if (logsProofForInterpolation()) {
-                // MB: the proof needs to know about the new clause
-                proof->newSplitClause(cr);
-            }
-            uncheckedEnqueue(l_i, cr);
-            return TPropRes::Propagate;
         }
     }
-    assert(false);
-    throw OsmtInternalException("Unreachable!");
+    assert(res != TPropRes::Undef);
+    if (res == TPropRes::Propagate) {
+        uncheckedEnqueue(toPropagate, propagationReason);
+        forced_split = lit_Undef;
+    }
+    return res;
 }
 
 TPropRes

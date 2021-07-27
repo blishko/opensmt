@@ -237,6 +237,7 @@ void Egraph::declareAtom(PTRef atom) {
     if (isInformed(atom)) { return; }
     declareTermRecursively(atom);
     setInformed(atom);
+    setKnown(atom);
 }
 
 void Egraph::declareTermRecursively(PTRef tr) {
