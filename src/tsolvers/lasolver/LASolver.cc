@@ -711,5 +711,38 @@ LABoundStore::BoundValuePair LASolver::getBoundsValueForRealVar(const Real & c, 
     }
 }
 
+namespace{
 
+struct DeltaHash {
+    std::size_t operator()(Delta const & d) const {
+        FastRationalHash hasher;
+        return (hasher(d.R()) ^ hasher(d.D()));
+    }
+};
+}
+
+vec<PTRef> LASolver::getDeducedEqualities(vec<PTRef> const & vars) {
+    vec<PTRef> result;
+    std::unordered_map<Delta, vec<PTRef>, DeltaHash> eqClasses;
+    for (PTRef var : vars) {
+        assert(logic.isNumVar(var) and laVarMapper.hasVar(var));
+        LVRef v = laVarMapper.getVarByPTId(logic.getPterm(var).getId());
+        auto value = simplex.getValuation(v);
+        eqClasses[value].push(var);
+    }
+
+    for (auto const & entry : eqClasses) {
+        auto const & equivalentVars = entry.second;
+        for (int i = 0; i < equivalentVars.size(); ++i) {
+            for (int j = i + 1; j < equivalentVars.size(); ++j) {
+                PTRef eq = logic.mkEq(equivalentVars[i], equivalentVars[j]);
+                if (propagatedEqualities.count(eq) == 0) {
+                    result.push(eq);
+                    propagatedEqualities.insert(eq);
+                }
+            }
+        }
+    }
+    return result;
+}
 

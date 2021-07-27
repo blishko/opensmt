@@ -49,8 +49,8 @@ TRes UFLRATHandler::check(bool fullCheck) {
             if (equalities.size() > 0) {
                 return res;
             } else {
-                // TODO: Obtain equalities from LRA solver
-//                throw std::logic_error("Not implemented yet!");
+                equalities = lrasolver->getDeducedEqualities(interfaceVariables);
+                equalities.copyTo(equalitiesToPropagate);
             }
         }
         return res;

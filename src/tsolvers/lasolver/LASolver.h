@@ -13,6 +13,7 @@
 #include "Simplex.h"
 
 #include <unordered_map>
+#include <unordered_set>
 #include "LAVarMapper.h"
 
 class LAVar;
@@ -107,6 +108,7 @@ public:
     void  pushBacktrackPoint ( ) override;                       // Push a backtrack point
     void  popBacktrackPoint  ( ) override;                       // Backtrack to last saved point
     void  popBacktrackPoints ( unsigned int ) override;         // Backtrack given number of saved points
+    vec<PTRef> getDeducedEqualities(vec<PTRef> const & vars) override;
 
 
     // Return the conflicting bounds
@@ -117,6 +119,8 @@ public:
 
 
 protected:
+
+    std::unordered_set<PTRef, PTRefHash> propagatedEqualities;
 
     LABoundStore::BoundInfo addBound(PTRef leq_tr);
     void updateBound(PTRef leq_tr);
