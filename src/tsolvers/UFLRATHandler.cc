@@ -62,6 +62,11 @@ TRes UFLRATHandler::check(bool fullCheck) {
 void UFLRATHandler::declareAtom(PTRef tr) {
     TSolverHandler::declareAtom(tr);
     if (logic.isUFEquality(tr)) {
+        auto it = knownEqualities.find(tr);
+        if (it != knownEqualities.end()) {
+            return;
+        }
+        knownEqualities.insert(tr);
         // Let's go for crude solution for now
         MapWithKeys<PTRef,bool,PTRefHash> allVars;
         getVars(tr, logic, allVars);
@@ -79,6 +84,9 @@ vec<PTRef> UFLRATHandler::getNewSplits() {
     vec<PTRef> res;
     if (equalitiesToPropagate.size() > 0) {
         for (PTRef eq : equalitiesToPropagate) {
+            if (knownEqualities.count(eq) != 0) {
+                continue;
+            }
             // create clauses corresponding to "x = y iff x >= y and x <= y"
             assert(logic.isNumEq(eq));
             PTRef lhs = logic.getPterm(eq)[0];

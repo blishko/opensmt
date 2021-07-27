@@ -28,6 +28,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "LRATHandler.h"
 
+#include <unordered_set>
+
 class Egraph;
 class UFLRALogic;
 class LRASolver;
@@ -41,6 +43,7 @@ class UFLRATHandler : public TSolverHandler
 
     vec<PTRef> interfaceVariables;
     vec<PTRef> equalitiesToPropagate;
+    std::unordered_set<PTRef, PTRefHash> knownEqualities;
 
   public:
     UFLRATHandler(SMTConfig & c, UFLRALogic & l);
