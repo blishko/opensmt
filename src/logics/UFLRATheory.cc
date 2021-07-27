@@ -134,7 +134,7 @@ PTRef UFLRATheory::addEqDefinitionsAndTrichotomyAxioms(PTRef fla) {
         PTRef lhs = logic.getPterm(eq)[0];
         PTRef rhs = logic.getPterm(eq)[1];
         // x = y => x <= y and x >= y
-        PTRef definition = logic.mkOr({logic.mkNot(eq), logic.mkNumLeq(lhs, rhs), logic.mkNumLeq(rhs, lhs)});
+        PTRef definition = logic.mkImpl(eq, logic.mkAnd(logic.mkNumLeq(lhs, rhs), logic.mkNumLeq(rhs, lhs)));
         axioms.push(definition);
         // x = y or x > y or x < y
         PTRef trichotomy = logic.mkOr({eq, logic.mkNumGt(lhs, rhs), logic.mkNumGt(rhs, lhs)});
