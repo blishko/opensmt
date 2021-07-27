@@ -17,11 +17,11 @@ public:
 
     // TODO: Unify this with Logic::isUF
     bool isInterpreted(SymRef sym) const {
-        return hasSortNum(sym) and not isVar(sym) and not isUF(sym);
+        return LRALogic::isTheorySymbol(sym) and getSym(sym).nargs() > 0 and not isUF(sym);
     }
 
     bool isUninterpreted(SymRef sym) const {
-        return isUF(sym) and getSym(sym).nargs() > 0;
+        return isUF(sym);
     }
 
     bool isNumVarLike(SymRef tr) const override { return isNumVarOrIte(tr) or isUninterpreted(tr); }
