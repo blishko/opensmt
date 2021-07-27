@@ -67,20 +67,25 @@ public:
 
 namespace{
 void closeSubstitutionMapOnKeys(Logic & logic, Logic::SubstMap & substMap) {
-    vec<PTRef> newKeys;
-    vec<PTRef> values;
-    vec<PTRef> oldKeys;
-    substMap.getKeys().copyTo(oldKeys);
-    for (PTRef oldKey : oldKeys) {
-        PTRef newKey = Substitutor(logic, substMap).rewrite(oldKey);
-        if (newKey != oldKey and newKey != substMap[oldKey]) {
-            newKeys.push(newKey);
-            values.push(substMap[oldKey]);
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        vec<PTRef> newKeys;
+        vec<PTRef> values;
+        vec<PTRef> oldKeys;
+        substMap.getKeys().copyTo(oldKeys);
+        for (PTRef oldKey : oldKeys) {
+            PTRef newKey = Substitutor(logic, substMap).rewrite(oldKey);
+            if (newKey != oldKey and newKey != substMap[oldKey]) {
+                changed = true;
+                newKeys.push(newKey);
+                values.push(substMap[oldKey]);
+            }
         }
-    }
-    assert(newKeys.size() == values.size());
-    for (int i = 0; i < newKeys.size(); ++i) {
-        substMap.insert(newKeys[i], values[i]);
+        assert(newKeys.size() == values.size());
+        for (int i = 0; i < newKeys.size(); ++i) {
+            substMap.insert(newKeys[i], values[i]);
+        }
     }
 }
 }
