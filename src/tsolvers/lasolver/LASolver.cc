@@ -725,7 +725,10 @@ vec<PTRef> LASolver::getDeducedEqualities(vec<PTRef> const & vars) {
     vec<PTRef> result;
     std::unordered_map<Delta, vec<PTRef>, DeltaHash> eqClasses;
     for (PTRef var : vars) {
-        assert(logic.isNumVar(var) and laVarMapper.hasVar(var));
+        assert(logic.isNumVar(var));
+        if (not laVarMapper.hasVar(var)) { // LASolver does not have any constraints on this LA var
+            continue;
+        }
         LVRef v = laVarMapper.getVarByPTId(logic.getPterm(var).getId());
         auto value = simplex.getValuation(v);
         eqClasses[value].push(var);
