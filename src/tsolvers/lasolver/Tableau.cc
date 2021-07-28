@@ -38,7 +38,7 @@ void Tableau::newRow(LVRef v, std::unique_ptr<Polynomial> poly) {
     ensureTableauReadyFor(v);
     addRow(v, std::move(poly));
     varTypes[getVarId(v)] = VarType::QUASIBASIC;
-
+    normalizeRow(v);
 }
 
 std::size_t Tableau::getNumOfCols() const {

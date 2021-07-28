@@ -243,7 +243,9 @@ LVRef LASolver::exprToLVar(PTRef expr) {
         bool isInt = true;
         for (auto const & term : *poly) {
             notifyVar(term.var);
-            simplex.nonbasicVar(term.var);
+            if (not simplex.isProcessedByTableau(term.var)) {
+                simplex.nonbasicVar(term.var);
+            }
             // MB: Notify must be called before the query isIntVar!
             isInt &= isIntVar(term.var) && term.coeff.isInteger();
         }
