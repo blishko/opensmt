@@ -27,6 +27,26 @@ public:
 };
 
 class Simplex {
+    class Candidates {
+        std::vector<LVRef> inner;
+        nat_set set;
+    public:
+        using const_iterator = decltype(inner)::const_iterator;
+        void add(LVRef ref);
+        void remove(LVRef ref);
+        bool contains(LVRef);
+        void init(std::size_t num);
+        void clear();
+
+        template<typename F>
+        LVRef getMin(F fun) const;
+
+        const_iterator begin() const { return inner.begin(); }
+        const_iterator end() const { return inner.end(); }
+
+    };
+
+
     std::unique_ptr<LRAModel> model;
     LABoundStore& boundStore;
 
@@ -44,8 +64,7 @@ class Simplex {
     void changeValueBy( LVRef, const Delta & );             // Updates the bounds after constraint pushing
     void refineBounds() { return; }                         // Compute the bounds for touched polynomials and deduces new bounds from it
     // Out of bound candidates
-    // mutable std::unordered_set<LVRef, LVRefHash> candidates;
-    mutable std::set<LVRef, LVRefComp> candidates;
+    Candidates candidates;
 //    bool isEquality(LVRef) const;
     const Delta overBound(LVRef) const;
     // Model & bounds
@@ -66,7 +85,10 @@ public:
     Simplex(LABoundStore&bs) : model(new LRAModel(bs)), boundStore(bs) {}
     ~Simplex();
 
-    void initModel() { model->init(); }
+    void initModel() {
+        model->init();
+        candidates.init(boundStore.getVarStore().numVars());
+    }
 
     void clear() { model->clear(); candidates.clear(); tableau.clear(); boundsActivated.clear(); }
     Explanation checkSimplex();

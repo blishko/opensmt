@@ -13,6 +13,36 @@
 #define simplex_assert(x)
 #endif // SIMPLEX_DEBUG
 
+void Simplex::Candidates::add(LVRef ref) {
+    if (not set.contains(getVarId(ref))) {
+        set.insert(getVarId(ref));
+        inner.push_back(ref);
+    }
+}
+
+void Simplex::Candidates::remove(LVRef ref) {
+    if (set.contains(getVarId(ref))) {
+        set.remove(getVarId(ref));
+        auto it = std::find(inner.begin(), inner.end(), ref);
+        assert(it != inner.end());
+        *it = inner.back();
+        inner.pop_back();
+    }
+}
+
+void Simplex::Candidates::clear() {
+    inner.clear();
+    set.reset();
+}
+
+void Simplex::Candidates::init(std::size_t num) {
+    set.assure_domain(num);
+}
+
+bool Simplex::Candidates::contains(LVRef ref) {
+    return set.contains(getVarId(ref));
+}
+
 // MB: helper functions
 namespace{
     bool isBoundSatisfied(Delta const & val, LABound const & bound ) {
@@ -251,11 +281,11 @@ Simplex::Explanation Simplex::assertBoundOnVar(LVRef it, LABoundRef itBound_ref)
 
 void Simplex::newCandidate(LVRef candidateVar) {
     assert(tableau.isBasic(candidateVar));
-    candidates.insert(candidateVar);
+    candidates.add(candidateVar);
 }
 
 void Simplex::eraseCandidate(LVRef candidateVar) {
-    candidates.erase(candidateVar);
+    candidates.remove(candidateVar);
 }
 
 
@@ -506,7 +536,7 @@ void Simplex::processBufferOfActivatedBounds() {
                 newCandidate(var);
             } else {
                 // MB: Experience shows this should really not happen
-                assert(candidates.find(var) == candidates.end());
+                assert(not candidates.contains(var));
             }
         }
     }
