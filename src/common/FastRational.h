@@ -10,9 +10,9 @@ Copyright (c) 2008, 2009 Centre national de la recherche scientifique (CNRS)
 #include <gmpxx.h>
 #include <cassert>
 #include <climits>
-#include "Vec.h"
 #include <stack>
 #include <vector>
+#include <numeric>
 
 typedef int32_t  word;
 typedef uint32_t uword;
@@ -513,30 +513,14 @@ inline int FastRational::sign() const {
     }
 }
 
-template<typename integer> integer gcd(integer a, integer b) {
-    if (a==0) return b;
-    if (b==0) return a;
-    if (b > a) {
-        integer c = a;
-        a = b;
-        b = c;
-    }
-    while(true) {
-        integer r = a%b;
-        if (r==0) return b;
-        a = b;
-        b = r;
-    }
-}
-
 template<typename integer>
 FastRational lcm(integer a, integer b) {
     if (a == 0) return 0;
     if (b == 0) return 0;
     if (b > a)
-        return FastRational(b / gcd(a, b)) * a;
+        return FastRational(b / std::gcd(a, b)) * a;
     else
-        return FastRational(a / gcd(a, b)) * b;
+        return FastRational(a / std::gcd(a, b)) * b;
 }
 
 // Return 1 if |op1| > |op2|, -1 if |op1| < |op2|, and 0 if op1 = op2
@@ -598,7 +582,7 @@ inline bool FastRational::isWellFormed() const
 {
     assert(wordPartValid() or not fitsWord());
     return (  wordPartValid() || mpqPartValid() )
-           && ( !wordPartValid() || (den != 0 && gcd(absVal(num), den)==1) )
+           && ( !wordPartValid() || (den != 0 && std::gcd(absVal(num), den)==1) )
            && ( !mpqPartValid()  || mpz_sgn(mpq_denref(mpq))!=0 )
            && ( !(wordPartValid() && mpqPartValid()) || wordAndMpqEqual());
     // Check that if both wordPartValid() and mpqPartValid(), the are the same number
@@ -617,7 +601,7 @@ inline FastRational::FastRational(word n, uword d) : state{State::WORD_VALID} {
         num = 0;
         den = 1;
     } else {
-        uword common = gcd<uword>(absVal(n), d);
+        uword common = std::gcd(absVal(n), d);
         if (common > 1) {
             num = n / common;
             den = d / common;
@@ -652,7 +636,7 @@ inline void addition(FastRational& dst, const FastRational& a, const FastRationa
             CHECK_WORD(dst.num, num_tmp);
             dst.den = b.den;
         } else {
-            uword common = gcd(a.den, b.den);
+            uword common = std::gcd(a.den, b.den);
             lword n1, n2;
             if (common != 1) {
                 n1 = lword(a.num) * (b.den / common);
@@ -664,7 +648,7 @@ inline void addition(FastRational& dst, const FastRational& a, const FastRationa
             lword n;
             CHECK_SUM_OVERFLOWS_LWORD(n, n1, n2);
             ulword d = ulword(a.den) * (b.den / common);
-            common = gcd(absVal(n), d);
+            common = std::gcd(absVal(n), d);
             word zn;
             uword zd;
             if (common != 1) {
@@ -712,7 +696,7 @@ inline void substraction(FastRational& dst, const FastRational& a, const FastRat
             CHECK_WORD(dst.num, lword(a.num)*b.den - lword(b.num));
             dst.den = b.den;
         } else {
-            uword common = gcd(a.den, b.den);
+            uword common = std::gcd(a.den, b.den);
             lword n1, n2, n;
             ulword d;
             if (common != 1) {
@@ -732,7 +716,7 @@ inline void substraction(FastRational& dst, const FastRational& a, const FastRat
                 d = ulword(a.den) * b.den;
             }
 
-            common = gcd(absVal(n), d);
+            common = std::gcd(absVal(n), d);
             word zn;
             uword zd;
             if (common != 1) {
@@ -776,7 +760,7 @@ inline void multiplication(FastRational& dst, const FastRational& a, const FastR
     if (a.wordPartValid() && b.wordPartValid()) {
         word zn;
         uword zd;
-        uword common1 = gcd(absVal(a.num), b.den), common2 = gcd(a.den, absVal(b.num));
+        uword common1 = std::gcd(absVal(a.num), b.den), common2 = std::gcd(a.den, absVal(b.num));
         lword k1, k2;
         ulword k3, k4; // Changed lword => ulword
         if (common1 > 1) {
@@ -825,8 +809,8 @@ inline void division(FastRational& dst, const FastRational& a, const FastRationa
             dst.setOnlyWordPartValid();
             return;
         }
-        uword common1 = gcd(absVal(a.num), absVal(b.num));
-        uword common2 = gcd(a.den, b.den);
+        uword common1 = std::gcd(absVal(a.num), absVal(b.num));
+        uword common2 = std::gcd(a.den, b.den);
         word zn;
         uword zd;
         CHECK_WORD(zn, ulword(absVal(a.num)/common1) * (b.den/common2));
@@ -881,7 +865,7 @@ inline void additionAssign(FastRational& a, const FastRational& b) {
                 lword n;
                 CHECK_SUM_OVERFLOWS_LWORD(n, c1, c2); // Overflow possible
                 ulword d = ulword(a.den) * b.den;
-                lword common = gcd(absVal(n), d);
+                lword common = std::gcd(absVal(n), d);
                 word zn;
                 uword zd;
                 if (common > 1) {
@@ -909,12 +893,12 @@ inline void additionAssign(FastRational& a, const FastRational& b) {
 
 inline void substractionAssign(FastRational& a, const FastRational& b) {
     if (a.wordPartValid() && b.wordPartValid()) {
-        uword common = gcd(a.den, b.den);
+        uword common = std::gcd(a.den, b.den);
         COMPUTE_WORD(n1, lword(a.num) * (b.den / common));
         COMPUTE_WORD(n2, lword(b.num) * (a.den / common));
         lword n = lword(n1) - lword(n2); // Cannot overflow
         ulword d = ulword(a.den) * (b.den / common);
-        common = gcd(absVal(n), d);
+        common = std::gcd(absVal(n), d);
         word zn;
         uword zd;
         if (common > 1) {
@@ -940,8 +924,8 @@ inline void substractionAssign(FastRational& a, const FastRational& b) {
 
 inline void multiplicationAssign(FastRational& a, const FastRational& b) {
     if (a.wordPartValid() && b.wordPartValid()) {
-        uword common1 = gcd(absVal(a.num), b.den);
-        uword common2 = gcd(a.den, absVal(b.num));
+        uword common1 = std::gcd(absVal(a.num), b.den);
+        uword common2 = std::gcd(a.den, absVal(b.num));
         word zn;
         uword zd;
         // Without the absVal, this fails for a.num < 0 when common1 > 1 and b.num < 0 when common2 > 1 since the result of the division is unsigned.
@@ -973,8 +957,8 @@ inline void multiplicationAssign(FastRational& a, const FastRational& b) {
 
 inline void divisionAssign(FastRational& a, const FastRational& b) {
     if (a.wordPartValid() && b.wordPartValid()) {
-        uword common1 = gcd(absVal(a.num), absVal(b.num));
-        uword common2 = gcd(a.den, b.den);
+        uword common1 = std::gcd(absVal(a.num), absVal(b.num));
+        uword common2 = std::gcd(a.den, b.den);
         word zn;
         uword zd;
         CHECK_WORD(zn, ulword(absVal(a.num) / common1) * (b.den / common2));

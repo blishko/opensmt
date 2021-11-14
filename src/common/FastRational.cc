@@ -112,7 +112,7 @@ FastRational gcd(FastRational const & a, FastRational const & b)
 {
     assert(a.isInteger() & b.isInteger());
     if (a.wordPartValid() && b.wordPartValid()) {
-        return FastRational(gcd(a.num, b.num));
+        return FastRational(std::gcd(a.num, b.num));
     }
     else {
         a.force_ensure_mpq_valid();
