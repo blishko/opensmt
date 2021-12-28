@@ -361,6 +361,12 @@ sstat MainSolver::check()
             assert(not smt_solver->isOK());
             rememberUnsatFrame(smt_solver->getConflictFrame());
         }
+        if (rval == s_True) {
+            auto model = getModel();
+            if(model->evaluate(root_instance.getRoot()) != logic.getTerm_true()) {
+                throw std::logic_error("Incorrect model!");
+            }
+        }
     }
 
     return rval;
