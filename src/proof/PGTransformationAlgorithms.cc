@@ -958,7 +958,7 @@ void ProofGraph::replaceSubproofsWithNoPartitionTheoryVars(std::vector<Var> cons
     std::deque<clauseid_t> toProcess;
     toProcess.assign(this->leaves_ids.begin(), this->leaves_ids.end());
     resetVisited1();
-    while (!toProcess.empty()) {
+    while (not toProcess.empty()) {
         clauseid_t current_id = toProcess.front();
         toProcess.pop_front();
         setVisited1(current_id);
@@ -966,12 +966,8 @@ void ProofGraph::replaceSubproofsWithNoPartitionTheoryVars(std::vector<Var> cons
         ProofNode * leaf = this->getNode(current_id);
         assert(leaf);
         assert(leaf->isLeaf());
-        bool hasMixed = false;
-        for (Var v : vars) {
-            short present = leaf->hasOccurrenceBin(v);
-            hasMixed |= (present != -1);
-        }
-        if (!hasMixed) { continue; }
+        bool hasMixed = std::any_of(vars.begin(), vars.end(), [leaf](Var v) { return leaf->hasOccurrenceBin(v) != -1; });
+        if (not hasMixed) { continue; }
         auto resolvents_ids = leaf->getResolvents();
         for (auto resolvent_id : resolvents_ids) {
             ProofNode * resolvent = this->getNode(resolvent_id);
@@ -985,13 +981,13 @@ void ProofGraph::replaceSubproofsWithNoPartitionTheoryVars(std::vector<Var> cons
             ProofNode * ant2 = resolvent->getAnt2();
             assert(ant1 && ant2);
             // only continue if both antecedents has been processed already!
-            if (!isSetVisited1(ant1->getId()) || !isSetVisited1(ant2->getId())) {
+            if (not isSetVisited1(ant1->getId()) or not isSetVisited1(ant2->getId())) {
                 // This resolvent will be processed when the second antecedent is taken from the queue
                 continue;
             }
             assert(ant1->getType() == clause_type::CLA_THEORY);
             assert(ant2->getType() == clause_type::CLA_THEORY);
-            assert(ant1->isLeaf() && ant2->isLeaf());
+            assert(ant1->isLeaf() and ant2->isLeaf());
             ant1->remRes(resolvent_id);
             ant2->remRes(resolvent_id);
             if (ant1->getNumResolvents() == 0) { this->removeNode(ant1->getId()); }
