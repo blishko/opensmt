@@ -297,9 +297,6 @@ icolor_t SingleInterpolationComputationContext::getPivotColor(ProofNode const & 
         // Remove pivot from resolvent if class AB
         clearPivotColoring(n);
     }
-    if (proofGraph.isAssumedVar(v)) { // Small hack to deal with assumption literals in proof
-        return icolor_t::I_S;
-    }
     return var_color;
 }
 
@@ -735,11 +732,10 @@ PTRef SingleInterpolationComputationContext::compInterpLabelingInner(ProofNode &
     assert (partial_interp_ant1 != PTRef_Undef);
     assert (partial_interp_ant2 != PTRef_Undef);
 
-    // Determine color pivot, depending on its color in the two antecedents
-    icolor_t pivot_color = getPivotColor(n);
-    if (pivot_color == icolor_t::I_S) {
-        Var v = n.getPivot();
-        Lit pos = mkLit(v);
+    Var pivot = n.getPivot();
+    // MB: Hack to deal with assumption literals from incremental solving
+    if (proofGraph.isAssumedVar(pivot)) {
+        Lit pos = mkLit(pivot);
         if (proofGraph.isAssumedLiteral(pos)) {
             // Positive occurence of assumed literal is in first parent => return interpolant from second
             return partial_interp_ant2;
@@ -749,6 +745,8 @@ PTRef SingleInterpolationComputationContext::compInterpLabelingInner(ProofNode &
             return partial_interp_ant1;
         }
     }
+    // Determine color pivot, depending on its color in the two antecedents
+    icolor_t pivot_color = getPivotColor(n);
     // Pivot colored a -> interpolant = interpolant of ant1 OR interpolant of ant2
     if (pivot_color == icolor_t::I_A) {
         return logic.mkOr(partial_interp_ant1, partial_interp_ant2);

@@ -17,8 +17,7 @@ enum class icolor_t : char {
     I_UNDEF = 0,
     I_A = 1,
     I_B = 2,
-    I_AB = I_A | I_B,
-    I_S = 4
+    I_AB = I_A | I_B
 };
 
 inline constexpr icolor_t operator| (icolor_t f, icolor_t s) {
@@ -35,7 +34,6 @@ inline std::string colorToString(icolor_t c) {
         case icolor_t::I_A: return "A";
         case icolor_t::I_B: return "B";
         case icolor_t::I_AB: return "AB";
-        case icolor_t::I_S: return "S";
         default:
             assert(false);
             throw std::logic_error("Unreachable");
