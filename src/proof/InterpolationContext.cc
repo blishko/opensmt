@@ -66,7 +66,11 @@ class SingleInterpolationComputationContext {
         }
     };
 
-    // NOTE class A has value -1, class B value -2, undetermined value -3, class AB has index bit from 0 onwards
+    // NOTE class A has value -1, class B value -2, mixed valued -3, undetermined value -4, class AB has index bit from 0 onwards
+    static constexpr int AB_MAPPING_A = -1;
+    static constexpr int AB_MAPPING_B = -2;
+    static constexpr int AB_MAPPING_MIX = -3;
+    static constexpr int AB_MAPPING_UNDEF = -4;
     std::vector<int> AB_vars_mapping;             // Variables of class AB mapping to mpz integer bit index
     std::vector<InterpolationNodeData> nodeData;
     Logic & logic;
@@ -84,9 +88,18 @@ public:
 
     icolor_t getVarClassFromCache(Var v) const {
         assert((unsigned) v < AB_vars_mapping.size());
-        assert(AB_vars_mapping[v] >= -2);
+        assert(AB_vars_mapping[v] > AB_MAPPING_UNDEF);
         int c = AB_vars_mapping[v];
-        return c == -1 ? icolor_t::I_A : (c == -2 ? icolor_t::I_B : icolor_t::I_AB);
+        switch (c) {
+            case AB_MAPPING_A:
+                return icolor_t::I_A;
+            case AB_MAPPING_B:
+                return icolor_t::I_B;
+            case AB_MAPPING_MIX:
+                return icolor_t::I_MIX;
+            default:
+                return icolor_t::I_AB;
+        }
     }
 
     SingleInterpolationComputationContext(
@@ -247,6 +260,7 @@ bool decideOnAlternativeInterpolation(PTRef I1, PTRef I2, Logic const & logic) {
 }
 
 icolor_t getClass(ipartitions_t const & mask, ipartitions_t const & A_mask) {
+    assert(mask != 0);
     ipartitions_t B_mask = ~A_mask;
 
     // Check if belongs to A or B
@@ -268,9 +282,12 @@ icolor_t SingleInterpolationComputationContext::getVarColor(ProofNode const & n,
     assert(n.isLeaf());
     // In labeling, classes and colors are distinct
     icolor_t var_class = getVarClass(v);
-    assert(var_class == icolor_t::I_A or var_class == icolor_t::I_B or var_class == icolor_t::I_AB);
-    icolor_t var_color = var_class == icolor_t::I_B || var_class == icolor_t::I_A ? var_class
-                                                                                  : getSharedVarColorInNode(v, n);
+    assert(var_class != icolor_t::I_UNDEF);
+
+    icolor_t var_color = var_class;
+    if (var_color == icolor_t::I_AB) {
+        var_color = getSharedVarColorInNode(v, n);
+    }
     return var_color;
 }
 
@@ -305,6 +322,7 @@ icolor_t SingleInterpolationComputationContext::getPivotColor(ProofNode const & 
 icolor_t SingleInterpolationComputationContext::getVarClass(Var v) const {
     if (proofGraph.isAssumedVar(v)) { return icolor_t::I_AB; } // MB: Does not matter for assumed literals
     const ipartitions_t & var_mask = getVarPartition(v);
+    if (var_mask == 0) { return icolor_t::I_MIX; }
     return getClass(var_mask, A_mask);
 }
 
@@ -498,19 +516,29 @@ SingleInterpolationComputationContext::SingleInterpolationComputationContext(
     auto const & vars = proof.getVariables();
     std::size_t varCounts = (*std::max_element(vars.begin(), vars.end())) + 1;
     nodeData.resize(proof.getGraphSize());
-    AB_vars_mapping.resize(varCounts, -3);
+    AB_vars_mapping.resize(varCounts, AB_MAPPING_UNDEF);
 
     // NOTE class A has value -1, class B value -2, undetermined value -3, class AB has index bit from 0 onwards
     int AB_bit_index = 0;
     for (Var v: vars) {
         icolor_t v_class = this->getVarClass(v);
-        if (v_class == icolor_t::I_A) { AB_vars_mapping[v] = -1; }
-        else if (v_class == icolor_t::I_B) { AB_vars_mapping[v] = -2; }
-        else if (v_class == icolor_t::I_AB) {
-            AB_vars_mapping[v] = AB_bit_index;
-            AB_bit_index++;
+        switch (v_class) {
+            case icolor_t::I_A:
+                AB_vars_mapping[v] = AB_MAPPING_A;
+                break;
+            case icolor_t::I_B:
+                AB_vars_mapping[v] = AB_MAPPING_B;
+                break;
+            case icolor_t::I_MIX:
+                AB_vars_mapping[v] = AB_MAPPING_MIX;
+                break;
+            case icolor_t::I_AB:
+                AB_vars_mapping[v] = AB_bit_index;
+                AB_bit_index++;
+                break;
+            default:
+                throw OsmtInternalException("Error in computing variable colors");
         }
-        else throw OsmtInternalException("Error in computing variable colors");
     }
     initTSolver();
 }

@@ -17,7 +17,8 @@ enum class icolor_t : char {
     I_UNDEF = 0,
     I_A = 1,
     I_B = 2,
-    I_AB = I_A | I_B
+    I_AB = I_A | I_B,
+    I_MIX = 4
 };
 
 inline constexpr icolor_t operator| (icolor_t f, icolor_t s) {
