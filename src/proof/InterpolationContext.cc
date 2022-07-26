@@ -10,6 +10,7 @@
 #include "PG.h"
 #include "VerificationUtils.h"
 #include "BoolRewriting.h"
+#include "TreeOps.h"
 
 class SingleInterpolationComputationContext {
     // Interpolation data for resolution proof element
@@ -970,6 +971,23 @@ PTRef InterpolationContext::simplifyInterpolant(PTRef itp) const {
     return itp;
 }
 
+namespace{
+std::optional<ipartitions_t> computeAllowedPartitions(PTRef atom, Logic & logic, PartitionManager & pmanager) {
+    assert(logic.isAtom(atom));
+    vec<PTRef> vars = ::variables(logic, atom);
+    assert(vars.size() > 0);
+    if (vars.size() == 0) { return 0; }
+    ipartitions_t allowed = pmanager.getIPartitions(vars[0]);
+    if (allowed == 0) { return {}; }
+    for (int i = 1; i < vars.size(); ++i) {
+        auto const & other = pmanager.getIPartitions(vars[i]);
+        if (other == 0) { return {}; }
+        allowed &= other;
+    }
+    return allowed;
+}
+}
+
 void InterpolationContext::ensureNoLiteralsWithoutPartition() {
     std::vector<Var> noPartitionVars;
     for (Var v : proof_graph->getVariables()) {
@@ -977,12 +995,13 @@ void InterpolationContext::ensureNoLiteralsWithoutPartition() {
         if(part == 0 && not proof_graph->isAssumedVar(v)) {
             PTRef term = termMapper.varToPTRef(v);
             assert(this->logic.isTheoryTerm(term));
-            auto allowedPartitions = pmanager.computeAllowedPartitions(term);
-            if (allowedPartitions != 0) {
-                // MB: Update the partition information
-                pmanager.addIPartitions(term, allowedPartitions);
-            }
-            else {
+            auto allowedPartitions = computeAllowedPartitions(term, logic, pmanager);
+            if (allowedPartitions.has_value()) {
+                if (allowedPartitions != 0) {
+                    // MB: Update the partition information
+                    pmanager.addIPartitions(term, allowedPartitions.value());
+                }
+            } else {
                 noPartitionVars.push_back(v);
             }
         }
